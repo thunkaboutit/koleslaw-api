@@ -1,6 +1,7 @@
 # prompt-enhance
 
-AI prompt enhancement API service. Takes rough or incomplete prompts and returns improved versions using LLM-powered enhancement strategies (expand, refine, structure).
+AI prompt enhancement API service. Takes rough or incomplete prompts and returns improved versions using LLM-powered
+enhancement strategies (expand, refine, structure).
 
 Built with FastAPI, LiteLLM, Redis, and PostgreSQL.
 
@@ -15,12 +16,12 @@ Built with FastAPI, LiteLLM, Redis, and PostgreSQL.
 
 ## API Endpoints
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/v1/health` | No | Health check (DB + Redis) |
-| `GET` | `/v1/models` | No | List available models |
-| `POST` | `/v1/enhance` | Yes | Streaming enhancement (SSE) |
-| `POST` | `/v1/enhance/sync` | Yes | Synchronous enhancement (JSON) |
+| Method | Path               | Auth | Description                    |
+|--------|--------------------|------|--------------------------------|
+| `GET`  | `/v1/health`       | No   | Health check (DB + Redis)      |
+| `GET`  | `/v1/models`       | No   | List available models          |
+| `POST` | `/v1/enhance`      | Yes  | Streaming enhancement (SSE)    |
+| `POST` | `/v1/enhance/sync` | Yes  | Synchronous enhancement (JSON) |
 
 ## Quick Start
 
@@ -56,7 +57,8 @@ make down        # Stop all services
 
 The API will be available at `http://localhost:8000`.
 
-> **Note:** When running with Docker Compose, the `.env` file should use service names as hostnames (`postgres` and `redis` instead of `localhost`).
+> **Note:** When running with Docker Compose, the `.env` file should use service names as hostnames (`postgres` and
+`redis` instead of `localhost`).
 
 ### Running for Local Development
 
@@ -77,18 +79,18 @@ curl http://localhost:8000/v1/models
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | — | PostgreSQL async connection string |
-| `REDIS_URL` | Yes | — | Redis connection string |
-| `API_KEY_HASH_SECRET` | Yes | — | Secret for API key hashing |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API key |
-| `OPENAI_API_KEY` | No | — | OpenAI API key |
-| `DEFAULT_MODEL` | No | `claude-haiku-4-5-20250929` | Default LLM model |
-| `ENVIRONMENT` | No | `development` | `development`, `staging`, or `production` |
-| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No | `60` | Per-key rate limit |
-| `CACHE_TTL_SECONDS` | No | `86400` | Cache entry lifetime (seconds) |
-| `CORS_ORIGINS` | No | `["*"]` | Allowed CORS origins |
+| Variable                         | Required | Default                     | Description                               |
+|----------------------------------|----------|-----------------------------|-------------------------------------------|
+| `DATABASE_URL`                   | Yes      | —                           | PostgreSQL async connection string        |
+| `REDIS_URL`                      | Yes      | —                           | Redis connection string                   |
+| `API_KEY_HASH_SECRET`            | Yes      | —                           | Secret for API key hashing                |
+| `ANTHROPIC_API_KEY`              | No       | —                           | Anthropic API key                         |
+| `OPENAI_API_KEY`                 | No       | —                           | OpenAI API key                            |
+| `DEFAULT_MODEL`                  | No       | `claude-haiku-4-5-20250929` | Default LLM model                         |
+| `ENVIRONMENT`                    | No       | `development`               | `development`, `staging`, or `production` |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                        | Per-key rate limit                        |
+| `CACHE_TTL_SECONDS`              | No       | `86400`                     | Cache entry lifetime (seconds)            |
+| `CORS_ORIGINS`                   | No       | `["*"]`                     | Allowed CORS origins                      |
 
 ## Development
 
@@ -147,4 +149,5 @@ src/prompt_enhance/
 
 ## CI
 
-GitHub Actions runs lint and test jobs in parallel on every push to `main` and on pull requests. See `.github/workflows/ci.yml`.
+GitHub Actions runs lint and test jobs in parallel on every push to `main` and on pull requests. See
+`.github/workflows/ci.yml`.
