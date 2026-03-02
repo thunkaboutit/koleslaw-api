@@ -50,7 +50,7 @@ async def enhance_stream(
     collected: list[str] = []
 
     async def generate():
-        async for chunk in await llm.enhance_stream(body):
+        async for chunk in llm.enhance_stream(body):
             collected.append(chunk.delta)
             yield _sse_event(chunk.model_dump_json())
         yield _sse_event("[DONE]")
