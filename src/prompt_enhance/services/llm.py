@@ -100,25 +100,25 @@ class LLMService:
     def get_available_models(self) -> list[ModelInfo]:
         return [
             ModelInfo(
-                id="claude-haiku-4-5-20250929",
+                id="anthropic/claude-haiku-4-5-20250929",
                 name="Claude 3.5 Haiku",
                 provider="anthropic",
                 tier="fast",
             ),
             ModelInfo(
-                id="claude-sonnet-4-20250514",
+                id="anthropic/claude-sonnet-4-20250514",
                 name="Claude Sonnet 4",
                 provider="anthropic",
                 tier="standard",
             ),
             ModelInfo(
-                id="gpt-4o-mini",
+                id="openai/gpt-4o-mini",
                 name="GPT-4o Mini",
                 provider="openai",
                 tier="fast",
             ),
             ModelInfo(
-                id="gpt-4o",
+                id="openai/gpt-4o",
                 name="GPT-4o",
                 provider="openai",
                 tier="premium",

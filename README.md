@@ -86,7 +86,7 @@ curl http://localhost:8000/v1/models
 | `API_KEY_HASH_SECRET`            | Yes      | —                           | Secret for API key hashing                |
 | `ANTHROPIC_API_KEY`              | No       | —                           | Anthropic API key                         |
 | `OPENAI_API_KEY`                 | No       | —                           | OpenAI API key                            |
-| `DEFAULT_MODEL`                  | No       | `claude-haiku-4-5-20250929` | Default LLM model                         |
+| `DEFAULT_MODEL`                  | No       | `anthropic/claude-haiku-4-5-20250929` | Default LLM model                   |
 | `ENVIRONMENT`                    | No       | `development`               | `development`, `staging`, or `production` |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                        | Per-key rate limit                        |
 | `CACHE_TTL_SECONDS`              | No       | `86400`                     | Cache entry lifetime (seconds)            |
