@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://localhost:5432/test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -21,8 +22,9 @@ def settings() -> Settings:
     return Settings(
         database_url="postgresql+asyncpg://localhost:5432/test",
         redis_url="redis://localhost:6379/0",
-        api_key_hash_secret="test-secret",
+        api_key_hash_secret=SecretStr("test-secret"),
         environment="development",
+        default_model="anthropic/claude-haiku-4-5",
     )
 
 
