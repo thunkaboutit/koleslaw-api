@@ -77,6 +77,26 @@ curl http://localhost:8000/v1/health
 curl http://localhost:8000/v1/models
 ```
 
+### Testing the Enhancer
+
+Synchronous (returns JSON):
+
+```bash
+curl http://localhost:8000/v1/enhance/sync \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write a poem", "enhancement_type": "refine"}'
+```
+
+Streaming (returns SSE):
+
+```bash
+curl -N http://localhost:8000/v1/enhance \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write a poem", "enhancement_type": "refine"}'
+```
+
+Enhancement types: `expand` (add detail), `refine` (improve clarity), `structure` (reorganize). To use a different model, add `"model": "openai/gpt-4o-mini"` to the JSON body.
+
 ## Environment Variables
 
 | Variable                         | Required | Default                     | Description                               |
