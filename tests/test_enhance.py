@@ -56,6 +56,19 @@ async def test_enhance_stream_returns_sse(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_enhance_sync_auto_type(client: AsyncClient) -> None:
+    """When enhancement_type is auto (the default), the request should succeed."""
+    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "write a function"},
+        )
+    assert response.status_code == 200
+    assert response.json()["enhanced_prompt"] == "Enhanced prompt result"
+
+
+@pytest.mark.asyncio
 async def test_enhance_sync_invalid_request(client: AsyncClient) -> None:
     response = await client.post(
         "/v1/enhance/sync",

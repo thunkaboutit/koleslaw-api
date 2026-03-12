@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from prompt_enhance.schemas.enhance import EnhanceRequest, EnhanceResponse
 from prompt_enhance.services.auth import get_current_api_key
 from prompt_enhance.services.cache import PromptCache
-from prompt_enhance.services.llm import LLMService, LLMServiceError
+from prompt_enhance.services.llm import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,9 @@ async def enhance_stream(
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache
     model = body.model or request.app.state.settings.default_model
+    resolved_type = LLMService.resolve_enhancement_type(body)
 
-    cached = await cache.get(body.prompt, body.enhancement_type, model)
+    cached = await cache.get(body.prompt, resolved_type, model)
     if cached is not None:
         hit = EnhanceResponse(
             enhanced_prompt=cached,
@@ -50,7 +51,7 @@ async def enhance_stream(
     collected: list[str] = []
 
     async def generate():
-        async for chunk in llm.enhance_stream(body):
+        async for chunk in llm.enhance_stream(body, resolved_type):
             collected.append(chunk.delta)
             yield _sse_event(chunk.model_dump_json())
         yield _sse_event("[DONE]")
@@ -61,7 +62,7 @@ async def enhance_stream(
         if full_response:
             try:
                 ttl = request.app.state.settings.cache_ttl_seconds
-                await cache.set(body.prompt, body.enhancement_type, model, full_response, ttl=ttl)
+                await cache.set(body.prompt, resolved_type, model, full_response, ttl=ttl)
             except Exception:
                 logger.exception("Failed to cache response")
 
@@ -83,8 +84,9 @@ async def enhance_sync(
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache
     model = body.model or request.app.state.settings.default_model
+    resolved_type = LLMService.resolve_enhancement_type(body)
 
-    cached = await cache.get(body.prompt, body.enhancement_type, model)
+    cached = await cache.get(body.prompt, resolved_type, model)
     if cached is not None:
         return EnhanceResponse(
             enhanced_prompt=cached,
@@ -93,13 +95,8 @@ async def enhance_sync(
             cached=True,
         )
 
-    try:
-        result = await llm.enhance(body)
-    except LLMServiceError:
-        raise
-    except Exception:
-        raise
+    result = await llm.enhance(body, resolved_type)
 
     ttl = request.app.state.settings.cache_ttl_seconds
-    await cache.set(body.prompt, body.enhancement_type, model, result.enhanced_prompt, ttl=ttl)
+    await cache.set(body.prompt, resolved_type, model, result.enhanced_prompt, ttl=ttl)
     return result

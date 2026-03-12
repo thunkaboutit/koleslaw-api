@@ -7,7 +7,7 @@ Built with FastAPI, LiteLLM, Redis, and PostgreSQL.
 
 ## Features
 
-- **Three enhancement modes**: expand (add detail), refine (improve clarity), structure (reorganize)
+- **Auto-detected enhancement modes**: expand (add detail), refine (improve clarity), structure (reorganize) — automatically selected based on prompt characteristics, with manual override
 - **Streaming and synchronous endpoints** via SSE and JSON
 - **Multi-provider LLM support** through LiteLLM (Anthropic, OpenAI)
 - **Exact-match prompt caching** with Redis (in-memory LRU fallback)
@@ -84,7 +84,7 @@ Synchronous (returns JSON):
 ```bash
 curl http://localhost:8000/v1/enhance/sync \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Write a poem", "enhancement_type": "refine"}'
+  -d '{"prompt": "Write a poem"}'
 ```
 
 Streaming (returns SSE):
@@ -92,25 +92,27 @@ Streaming (returns SSE):
 ```bash
 curl -N http://localhost:8000/v1/enhance \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Write a poem", "enhancement_type": "refine"}'
+  -d '{"prompt": "Write a poem"}'
 ```
 
-Enhancement types: `expand` (add detail), `refine` (improve clarity), `structure` (reorganize). To use a different model, add `"model": "openai/gpt-4o-mini"` to the JSON body.
+The enhancement type is automatically selected based on prompt length and structure. To override, pass
+`"enhancement_type": "expand"`, `"refine"`, or `"structure"` in the request body. To use a different model, add
+`"model": "openai/gpt-4o-mini"`.
 
 ## Environment Variables
 
-| Variable                         | Required | Default                     | Description                               |
-|----------------------------------|----------|-----------------------------|-------------------------------------------|
-| `DATABASE_URL`                   | Yes      | —                           | PostgreSQL async connection string        |
-| `REDIS_URL`                      | Yes      | —                           | Redis connection string                   |
-| `API_KEY_HASH_SECRET`            | Yes      | —                           | Secret for API key hashing                |
-| `ANTHROPIC_API_KEY`              | No       | —                           | Anthropic API key                         |
-| `OPENAI_API_KEY`                 | No       | —                           | OpenAI API key                            |
-| `DEFAULT_MODEL`                  | No       | `anthropic/claude-haiku-4-5-20250929` | Default LLM model                   |
-| `ENVIRONMENT`                    | No       | `development`               | `development`, `staging`, or `production` |
-| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                        | Per-key rate limit                        |
-| `CACHE_TTL_SECONDS`              | No       | `86400`                     | Cache entry lifetime (seconds)            |
-| `CORS_ORIGINS`                   | No       | `["*"]`                     | Allowed CORS origins                      |
+| Variable                         | Required | Default                       | Description                               |
+|----------------------------------|----------|-------------------------------|-------------------------------------------|
+| `DATABASE_URL`                   | Yes      | —                             | PostgreSQL async connection string        |
+| `REDIS_URL`                      | Yes      | —                             | Redis connection string                   |
+| `API_KEY_HASH_SECRET`            | Yes      | —                             | Secret for API key hashing                |
+| `ANTHROPIC_API_KEY`              | No       | —                             | Anthropic API key                         |
+| `OPENAI_API_KEY`                 | No       | —                             | OpenAI API key                            |
+| `DEFAULT_MODEL`                  | No       | `anthropic/claude-sonnet-4-6` | Default LLM model                         |
+| `ENVIRONMENT`                    | No       | `development`                 | `development`, `staging`, or `production` |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                          | Per-key rate limit                        |
+| `CACHE_TTL_SECONDS`              | No       | `86400`                       | Cache entry lifetime (seconds)            |
+| `CORS_ORIGINS`                   | No       | `["*"]`                       | Allowed CORS origins                      |
 
 ## Development
 
@@ -154,7 +156,7 @@ src/prompt_enhance/
 │   ├── engine.py        # Async SQLAlchemy engine factory
 │   └── models.py        # ORM models (ApiKey, UsageLog)
 ├── prompts/
-│   └── system.py        # Meta-prompt templates
+│   └── system.py        # Enhancement type classification and meta-prompt templates
 ├── routes/
 │   ├── health.py        # GET /v1/health
 │   ├── models.py        # GET /v1/models

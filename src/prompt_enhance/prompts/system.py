@@ -1,3 +1,31 @@
+import re
+
+
+def classify_enhancement_type(prompt: str) -> str:
+    """Classify a prompt into expand, refine, or structure based on heuristics.
+
+    Rules:
+    - Short prompts (< 15 words) → expand (too terse to refine or structure)
+    - Long prompts (> 80 words) that lack organization → structure
+    - Long prompts that already have structure markers → refine
+    - Everything else → refine
+    """
+    words = prompt.split()
+    word_count = len(words)
+
+    if word_count < 15:
+        return "expand"
+
+    has_structure = bool(
+        re.search(r"(^|\n)\s*[-*•]|\d+[.)]\s|\n#{1,6}\s", prompt)
+    )
+
+    if word_count > 80 and not has_structure:
+        return "structure"
+
+    return "refine"
+
+
 ENHANCEMENT_PROMPTS: dict[str, str] = {
     "expand": (
         "You are an expert prompt engineer. Your task is to take a brief, terse, or "

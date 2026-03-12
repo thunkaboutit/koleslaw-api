@@ -7,7 +7,7 @@ class EnhanceRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=50000)
     context: str | None = None
     model: str | None = None
-    enhancement_type: Literal["expand", "refine", "structure"] = "refine"
+    enhancement_type: Literal["auto", "expand", "refine", "structure"] = "auto"
     stream: bool = True
 
 

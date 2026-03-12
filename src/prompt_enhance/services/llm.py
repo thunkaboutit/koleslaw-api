@@ -5,7 +5,7 @@ import litellm
 from litellm import acompletion
 
 from prompt_enhance.config import Settings
-from prompt_enhance.prompts.system import get_system_prompt
+from prompt_enhance.prompts.system import classify_enhancement_type, get_system_prompt
 from prompt_enhance.schemas.enhance import (
     EnhanceChunk,
     EnhanceRequest,
@@ -33,8 +33,14 @@ class LLMService:
     def _resolve_model(self, request: EnhanceRequest) -> str:
         return request.model or self._settings.default_model
 
-    def _build_messages(self, request: EnhanceRequest) -> list[dict[str, str]]:
-        system_prompt = get_system_prompt(request.enhancement_type, request.context)
+    @staticmethod
+    def resolve_enhancement_type(request: EnhanceRequest) -> str:
+        if request.enhancement_type == "auto":
+            return classify_enhancement_type(request.prompt)
+        return request.enhancement_type
+
+    def _build_messages(self, request: EnhanceRequest, resolved_type: str) -> list[dict[str, str]]:
+        system_prompt = get_system_prompt(resolved_type, request.context)
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": request.prompt},
@@ -55,9 +61,10 @@ class LLMService:
             return LLMServiceError(str(exc), "service_unavailable")
         return LLMServiceError(str(exc), "llm_error", detail=type(exc).__name__)
 
-    async def enhance(self, request: EnhanceRequest) -> EnhanceResponse:
+    async def enhance(self, request: EnhanceRequest, resolved_type: str | None = None) -> EnhanceResponse:
         model = self._resolve_model(request)
-        messages = self._build_messages(request)
+        resolved = resolved_type or self.resolve_enhancement_type(request)
+        messages = self._build_messages(request, resolved)
         try:
             response = await acompletion(
                 model=model,
@@ -77,10 +84,11 @@ class LLMService:
         )
 
     async def enhance_stream(
-        self, request: EnhanceRequest
+        self, request: EnhanceRequest, resolved_type: str | None = None
     ) -> AsyncGenerator[EnhanceChunk, None]:
         model = self._resolve_model(request)
-        messages = self._build_messages(request)
+        resolved = resolved_type or self.resolve_enhancement_type(request)
+        messages = self._build_messages(request, resolved)
         try:
             response = await acompletion(
                 model=model,
