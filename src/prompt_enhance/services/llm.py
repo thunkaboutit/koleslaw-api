@@ -108,13 +108,13 @@ class LLMService:
     def get_available_models(self) -> list[ModelInfo]:
         return [
             ModelInfo(
-                id="anthropic/claude-haiku-4-5-20250929",
-                name="Claude 3.5 Haiku",
+                id="anthropic/claude-haiku-4-5",
+                name="Claude Haiku 4.5",
                 provider="anthropic",
                 tier="fast",
             ),
             ModelInfo(
-                id="anthropic/claude-sonnet-4-20250514",
+                id="anthropic/claude-sonnet-4-5",
                 name="Claude Sonnet 4",
                 provider="anthropic",
                 tier="standard",
