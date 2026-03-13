@@ -29,6 +29,7 @@ class LLMService:
             os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key.get_secret_value()
         if settings.openai_api_key:
             os.environ["OPENAI_API_KEY"] = settings.openai_api_key.get_secret_value()
+        os.environ["OLLAMA_API_BASE"] = settings.ollama_base_url
 
     def _resolve_model(self, request: EnhanceRequest) -> str:
         return request.model or self._settings.default_model
@@ -107,6 +108,30 @@ class LLMService:
 
     def get_available_models(self) -> list[ModelInfo]:
         return [
+            ModelInfo(
+                id="ollama_chat/prompt-enhance-14b-think",
+                name="Prompt Enhance 14B (think)",
+                provider="ollama",
+                tier="local",
+            ),
+            ModelInfo(
+                id="ollama_chat/prompt-enhance-14b-nothink",
+                name="Prompt Enhance 14B",
+                provider="ollama",
+                tier="local",
+            ),
+            ModelInfo(
+                id="ollama_chat/prompt-enhance-4b-think",
+                name="Prompt Enhance 4B (think)",
+                provider="ollama",
+                tier="local",
+            ),
+            ModelInfo(
+                id="ollama_chat/prompt-enhance-4b-nothink",
+                name="Prompt Enhance 4B",
+                provider="ollama",
+                tier="local",
+            ),
             ModelInfo(
                 id="anthropic/claude-haiku-4-5",
                 name="Claude Haiku 4.5",

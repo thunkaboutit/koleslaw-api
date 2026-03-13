@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     redis_url: str
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
-    default_model: str = "anthropic/claude-haiku-4-5-20250929"
+    ollama_base_url: str = "http://localhost:11434"
+    default_model: str = "ollama_chat/prompt-enhance-14b-think"
     environment: Literal["development", "staging", "production"] = "development"
     api_key_hash_secret: SecretStr
     cors_origins: list[str] = ["*"]

@@ -24,7 +24,7 @@ def settings() -> Settings:
         redis_url="redis://localhost:6379/0",
         api_key_hash_secret=SecretStr("test-secret"),
         environment="development",
-        default_model="anthropic/claude-haiku-4-5",
+        default_model="ollama_chat/prompt-enhance-14b-think",
     )
 
 

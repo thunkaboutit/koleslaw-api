@@ -34,7 +34,7 @@ async def test_enhance_sync_returns_response(client: AsyncClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["enhanced_prompt"] == "Enhanced prompt result"
-    assert data["model_used"] == "anthropic/claude-haiku-4-5"
+    assert data["model_used"] == "ollama_chat/prompt-enhance-14b-think"
     assert data["usage"]["input_tokens"] == 10
     assert data["usage"]["output_tokens"] == 20
 

@@ -101,18 +101,19 @@ The enhancement type is automatically selected based on prompt length and struct
 
 ## Environment Variables
 
-| Variable                         | Required | Default                       | Description                               |
-|----------------------------------|----------|-------------------------------|-------------------------------------------|
-| `DATABASE_URL`                   | Yes      | —                             | PostgreSQL async connection string        |
-| `REDIS_URL`                      | Yes      | —                             | Redis connection string                   |
-| `API_KEY_HASH_SECRET`            | Yes      | —                             | Secret for API key hashing                |
-| `ANTHROPIC_API_KEY`              | No       | —                             | Anthropic API key                         |
-| `OPENAI_API_KEY`                 | No       | —                             | OpenAI API key                            |
-| `DEFAULT_MODEL`                  | No       | `anthropic/claude-sonnet-4-6` | Default LLM model                         |
-| `ENVIRONMENT`                    | No       | `development`                 | `development`, `staging`, or `production` |
-| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                          | Per-key rate limit                        |
-| `CACHE_TTL_SECONDS`              | No       | `86400`                       | Cache entry lifetime (seconds)            |
-| `CORS_ORIGINS`                   | No       | `["*"]`                       | Allowed CORS origins                      |
+| Variable                         | Required | Default                                  | Description                               |
+|----------------------------------|----------|------------------------------------------|-------------------------------------------|
+| `DATABASE_URL`                   | Yes      | —                                        | PostgreSQL async connection string        |
+| `REDIS_URL`                      | Yes      | —                                        | Redis connection string                   |
+| `API_KEY_HASH_SECRET`            | Yes      | —                                        | Secret for API key hashing                |
+| `OLLAMA_BASE_URL`                | No       | `http://localhost:11434`                 | Ollama API base URL                       |
+| `ANTHROPIC_API_KEY`              | No       | —                                        | Anthropic API key (for frontier fallback) |
+| `OPENAI_API_KEY`                 | No       | —                                        | OpenAI API key (for frontier fallback)    |
+| `DEFAULT_MODEL`                  | No       | `ollama_chat/prompt-enhance-14b-think`   | Default LLM model                         |
+| `ENVIRONMENT`                    | No       | `development`                            | `development`, `staging`, or `production` |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                                     | Per-key rate limit                        |
+| `CACHE_TTL_SECONDS`              | No       | `86400`                                  | Cache entry lifetime (seconds)            |
+| `CORS_ORIGINS`                   | No       | `["*"]`                                  | Allowed CORS origins                      |
 
 ## Development
 

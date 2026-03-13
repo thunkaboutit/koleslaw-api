@@ -38,7 +38,7 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     provider: str
-    tier: Literal["fast", "standard", "premium"]
+    tier: Literal["local", "fast", "standard", "premium"]
 
 
 class HealthResponse(BaseModel):
