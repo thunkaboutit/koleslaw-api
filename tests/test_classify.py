@@ -1,5 +1,3 @@
-import pytest
-
 from prompt_enhance.prompts.system import classify_enhancement_type
 
 
