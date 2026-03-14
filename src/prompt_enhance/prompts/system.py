@@ -16,9 +16,7 @@ def classify_enhancement_type(prompt: str) -> str:
     if word_count < 15:
         return "expand"
 
-    has_structure = bool(
-        re.search(r"(^|\n)\s*[-*•]|\d+[.)]\s|\n#{1,6}\s", prompt)
-    )
+    has_structure = bool(re.search(r"(^|\n)\s*[-*•]|\d+[.)]\s|\n#{1,6}\s", prompt))
 
     if word_count > 80 and not has_structure:
         return "structure"

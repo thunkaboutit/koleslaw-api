@@ -27,9 +27,7 @@ class UsageLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     api_key_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("api_keys.id"))
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
-    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     model: Mapped[str] = mapped_column(String(100))
     enhancement_type: Mapped[str] = mapped_column(String(50))
     input_tokens: Mapped[int] = mapped_column(Integer)
