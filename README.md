@@ -62,7 +62,7 @@ The API will be available at `http://localhost:8000`.
 
 ### Running for Local Development
 
-Start PostgreSQL and Redis separately (e.g., via Docker or local install), then:
+PostgreSQL and Redis will be started via Docker Compose for you.
 
 ```bash
 make dev         # Start uvicorn with --reload

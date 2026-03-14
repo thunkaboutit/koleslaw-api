@@ -7,12 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "litellm",
+    "litellm>=1.82.2",
     "pydantic-settings",
-    "redis[hiredis]",
-    "sqlalchemy[asyncio]",
+    "redis[hiredis]>=7.3.0",
+    "sqlalchemy[asyncio]>=2.0.48",
     "asyncpg",
     "httpx",
+    "ruff>=0.15.6",
 ]
 
 [dependency-groups]
@@ -20,7 +21,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-httpx",
-    "ruff",
+    "ruff>=0.15.6",
     "mypy",
 ]
 
