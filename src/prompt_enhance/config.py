@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     default_model: str = "ollama_chat/prompt-enhance-14b-think"
     environment: Literal["development", "staging", "production"] = "development"
     api_key_hash_secret: SecretStr
+    session_secret: SecretStr
     cors_origins: list[str] = ["*"]
     rate_limit_requests_per_minute: int = 60
     cache_ttl_seconds: int = 86400

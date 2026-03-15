@@ -10,6 +10,7 @@ from pydantic import SecretStr
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://localhost:5432/test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("API_KEY_HASH_SECRET", "test-secret")
+os.environ.setdefault("SESSION_SECRET", "test-session-secret")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from prompt_enhance.config import Settings, get_settings  # noqa: E402
@@ -23,6 +24,7 @@ def settings() -> Settings:
         database_url="postgresql+asyncpg://localhost:5432/test",
         redis_url="redis://localhost:6379/0",
         api_key_hash_secret=SecretStr("test-secret"),
+        session_secret=SecretStr("test-session-secret"),
         environment="development",
         default_model="ollama_chat/prompt-enhance-14b-think",
     )

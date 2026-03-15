@@ -5,8 +5,10 @@ import secrets
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
+from sqlalchemy import select
 
 from prompt_enhance.config import Settings, get_settings
+from prompt_enhance.db.models import ApiKey
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +21,6 @@ def hash_api_key(key: str) -> str:
 
 def generate_api_key() -> str:
     return f"pk_live_{secrets.token_urlsafe(32)}"
-
-
-async def validate_api_key(key: str, redis: Redis) -> bool:
-    key_hash = hash_api_key(key)
-    return bool(await redis.sismember("api_keys:valid", key_hash))
 
 
 async def check_rate_limit(
@@ -65,15 +62,25 @@ async def get_current_api_key(
         raise HTTPException(status_code=401, detail="Missing API key")
 
     key = credentials.credentials
+    key_hash = hash_api_key(key)
 
-    if not await validate_api_key(key, redis):
+    # Validate key against the database and check is_active
+    db_session_factory = request.app.state.db_session_factory
+    async with db_session_factory() as session:
+        result = await session.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
+        api_key_row = result.scalar_one_or_none()
+
+    if api_key_row is None:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    key_hash = hash_api_key(key)
+    if not api_key_row.is_active:
+        raise HTTPException(status_code=401, detail="API key has been revoked")
+
+    # Use the per-key rate limit from the database
     is_allowed, remaining = await check_rate_limit(
         key_hash,
         redis,
-        max_requests=settings.rate_limit_requests_per_minute,
+        max_requests=api_key_row.rate_limit,
     )
 
     if not is_allowed:

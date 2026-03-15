@@ -13,6 +13,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.48",
     "asyncpg",
     "httpx",
+    "PyJWT>=2.8.0",
     "ruff>=0.15.6",
 ]
 
