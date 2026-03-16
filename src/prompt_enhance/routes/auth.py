@@ -85,12 +85,14 @@ async def ensure_dev_admin(request: Request, settings: Settings) -> None:
 # Helper to build a session-cookie response
 # ---------------------------------------------------------------------------
 
-def _session_response(user_id: uuid.UUID, settings: Settings) -> Response:
+def _session_response(
+    user_id: uuid.UUID, settings: Settings, *, redirect_to: str | None = None
+) -> Response:
     token = create_session_token(user_id, settings)
-    response = Response(
-        content='{"status":"ok"}',
-        media_type="application/json",
-    )
+    if redirect_to:
+        response = Response(status_code=307, headers={"Location": redirect_to})
+    else:
+        response = Response(content='{"status":"ok"}', media_type="application/json")
     response.set_cookie(
         SESSION_COOKIE,
         token,
@@ -236,19 +238,8 @@ async def github_callback(
             await session.commit()
 
     # Set session cookie and redirect to frontend
-    token = create_session_token(user.id, settings)
-    response = Response(
-        status_code=307,
-        headers={"Location": f"{settings.frontend_url}/dashboard"},
-    )
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=int(SESSION_MAX_AGE.total_seconds()),
-        httponly=True,
-        samesite="lax",
-        secure=settings.environment != "development",
-        path="/",
+    response = _session_response(
+        user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard"
     )
     response.delete_cookie(OAUTH_STATE_COOKIE)
     return response
