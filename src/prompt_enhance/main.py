@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -9,11 +10,12 @@ from redis.asyncio import Redis
 
 from prompt_enhance.config import get_settings
 from prompt_enhance.db.engine import async_session_factory, create_engine
-from prompt_enhance.routes import enhance, health, keys, models, usage
+from prompt_enhance.routes import auth, enhance, health, keys, models, usage
 from prompt_enhance.schemas.enhance import ErrorResponse
 from prompt_enhance.services.cache import PromptCache
 from prompt_enhance.services.llm import LLMService, LLMServiceError
 
+logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s:     %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,16 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.settings = settings
+
+    logger.info("Starting Prompt Enhance API")
+    logger.info("  environment    = %s", settings.environment)
+    logger.info("  database_url   = %s", settings.database_url)
+    logger.info("  redis_url      = %s", settings.redis_url)
+    logger.info("  ollama_base    = %s", settings.ollama_base_url)
+    logger.info("  default_model  = %s", settings.default_model)
+    logger.info("  frontend_url   = %s", settings.frontend_url)
+    logger.info("  cors_origins   = %s", settings.cors_origins)
+    logger.info("  github_oauth   = %s", "configured" if settings.github_client_id else "not configured")
 
     engine = create_engine(settings.database_url)
     app.state.db_engine = engine
@@ -54,6 +66,7 @@ app.include_router(models.router)
 app.include_router(enhance.router)
 app.include_router(keys.router)
 app.include_router(usage.router)
+app.include_router(auth.router)
 
 
 @app.exception_handler(LLMServiceError)
