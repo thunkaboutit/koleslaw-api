@@ -1,4 +1,7 @@
-.PHONY: up-local up-dev down-local down-dev logs test lint format dev-local db-init-local db-init-dev db-reset
+.PHONY: list up-local up-dev down-local down-dev logs test lint format dev-local db-init-local db-init-dev db-reset
+
+list:
+	cat Makefile | grep '^[^#[:space:]].*:' | grep -v PHONY
 
 up-local:
 	docker compose up -d
