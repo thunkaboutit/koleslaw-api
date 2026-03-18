@@ -1,10 +1,17 @@
-.PHONY: up down logs test lint format dev db-init db-reset
+.PHONY: up-local up-dev down-local down-dev logs test lint format dev-local db-init-local db-init-dev db-reset
 
-up:
+up-local:
 	docker compose up -d
 
-down:
+up-dev:
+	docker compose -f docker-compose.dev.yml up -d
+
+
+down-local:
 	docker compose down
+
+down-dev:
+	docker compose -f docker-compose.dev.yml down
 
 logs:
 	docker compose logs -f
@@ -18,22 +25,39 @@ lint:
 format:
 	uv run ruff format src/
 
-dev:
+dev-local:
 	docker compose up -d postgres redis
 	uv run uvicorn prompt_enhance.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
-db-init:
+db-init-local:
 	docker compose up -d postgres
 	@echo "Waiting for PostgreSQL..."
 	@until docker compose exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 	docker compose exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
 	@echo "Database initialized."
 
-db-reset:
+db-init-dev:
+	docker compose up -d postgres
+	@echo "Waiting for PostgreSQL..."
+	@until docker compose exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
+	docker compose exec -T postgres psql -U app -d appdb < db/init.sql
+	@echo "Database initialized."
+
+
+db-reset-local:
 	docker compose down -v
 	docker compose up -d postgres
 	@echo "Waiting for PostgreSQL..."
 	@until docker compose exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 	docker compose exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
+	docker compose up -d redis
+	@echo "Database reset complete."
+
+db-reset-dev:
+	docker compose down -v
+	docker compose up -d postgres
+	@echo "Waiting for PostgreSQL..."
+	@until docker compose exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
+	docker compose exec -T postgres psql -U app -d appdb < db/init.sql
 	docker compose up -d redis
 	@echo "Database reset complete."
