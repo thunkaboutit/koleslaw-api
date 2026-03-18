@@ -1,4 +1,13 @@
 services:
+  portal:
+    build: ../koleslaw-developer-portal
+    ports:
+      - "5173:80"
+    environment:
+      API_UPSTREAM: http://api:8000
+    depends_on:
+      - api
+
   api:
     build: .
     ports:
