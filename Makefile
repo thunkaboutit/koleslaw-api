@@ -33,34 +33,34 @@ dev-local:
 	uv run uvicorn prompt_enhance.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
 db-init-local:
-	docker compose up -d postgres
+	docker compose -f docker-compose.dev.yml up -d postgres
 	@echo "Waiting for PostgreSQL..."
-	@until docker compose exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-	docker compose exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
+	@until docker compose -f docker-compose.dev.yml exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
 	@echo "Database initialized."
 
 db-init-dev:
-	docker compose up -d postgres
+	docker compose -f docker-compose.dev.yml up -d postgres
 	@echo "Waiting for PostgreSQL..."
-	@until docker compose exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
-	docker compose exec -T postgres psql -U app -d appdb < db/init.sql
+	@until docker compose -f docker-compose.dev.yml exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U app -d appdb < db/init.sql
 	@echo "Database initialized."
 
 
 db-reset-local:
-	docker compose down -v
-	docker compose up -d postgres
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml up -d postgres
 	@echo "Waiting for PostgreSQL..."
-	@until docker compose exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-	docker compose exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
-	docker compose up -d redis
+	@until docker compose -f docker-compose.dev.yml exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
+	docker compose -f docker-compose.dev.yml up -d redis
 	@echo "Database reset complete."
 
 db-reset-dev:
-	docker compose down -v
-	docker compose up -d postgres
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml up -d postgres
 	@echo "Waiting for PostgreSQL..."
-	@until docker compose exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
-	docker compose exec -T postgres psql -U app -d appdb < db/init.sql
-	docker compose up -d redis
+	@until docker compose -f docker-compose.dev.yml exec postgres pg_isready -U app > /dev/null 2>&1; do sleep 1; done
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U app -d appdb < db/init.sql
+	docker compose -f docker-compose.dev.yml up -d redis
 	@echo "Database reset complete."
