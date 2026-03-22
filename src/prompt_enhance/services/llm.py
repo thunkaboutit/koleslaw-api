@@ -1,6 +1,8 @@
+import logging
 import os
 from collections.abc import AsyncGenerator
 
+import httpx
 import litellm
 from litellm import acompletion
 
@@ -106,54 +108,39 @@ class LLMService:
             if delta or finish_reason:
                 yield EnhanceChunk(delta=delta, finish_reason=finish_reason)
 
-    def get_available_models(self) -> list[ModelInfo]:
-        return [
-            ModelInfo(
-                id="ollama_chat/prompt-enhance-14b-think",
-                name="Prompt Enhance 14B (think)",
-                provider="ollama",
-                tier="local",
-            ),
-            ModelInfo(
-                id="ollama_chat/prompt-enhance-14b-nothink",
-                name="Prompt Enhance 14B",
-                provider="ollama",
-                tier="local",
-            ),
-            ModelInfo(
-                id="ollama_chat/prompt-enhance-4b-think",
-                name="Prompt Enhance 4B (think)",
-                provider="ollama",
-                tier="local",
-            ),
-            ModelInfo(
-                id="ollama_chat/prompt-enhance-4b-nothink",
-                name="Prompt Enhance 4B",
-                provider="ollama",
-                tier="local",
-            ),
-            ModelInfo(
-                id="anthropic/claude-haiku-4-5",
-                name="Claude Haiku 4.5",
-                provider="anthropic",
-                tier="fast",
-            ),
-            ModelInfo(
-                id="anthropic/claude-sonnet-4-5",
-                name="Claude Sonnet 4",
-                provider="anthropic",
-                tier="standard",
-            ),
-            ModelInfo(
-                id="openai/gpt-4o-mini",
-                name="GPT-4o Mini",
-                provider="openai",
-                tier="fast",
-            ),
-            ModelInfo(
-                id="openai/gpt-4o",
-                name="GPT-4o",
-                provider="openai",
-                tier="premium",
-            ),
-        ]
+    async def get_available_models(self) -> list[ModelInfo]:
+        models: list[ModelInfo] = []
+
+        # Query Ollama for locally available models
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{self._settings.ollama_base_url}/api/tags")
+                resp.raise_for_status()
+                for m in resp.json().get("models", []):
+                    name = m.get("name", "")
+                    if not name:
+                        continue
+                    models.append(
+                        ModelInfo(
+                            id=f"ollama_chat/{name}",
+                            name=name,
+                            provider="ollama",
+                            tier="local",
+                        )
+                    )
+        except Exception:
+            logging.getLogger(__name__).warning("Failed to fetch models from Ollama")
+
+        # Add cloud provider models if API keys are configured
+        if self._settings.anthropic_api_key:
+            models.extend([
+                ModelInfo(id="anthropic/claude-haiku-4-5", name="Claude Haiku 4.5", provider="anthropic", tier="fast"),
+                ModelInfo(id="anthropic/claude-sonnet-4-5", name="Claude Sonnet 4", provider="anthropic", tier="standard"),
+            ])
+        if self._settings.openai_api_key:
+            models.extend([
+                ModelInfo(id="openai/gpt-4o-mini", name="GPT-4o Mini", provider="openai", tier="fast"),
+                ModelInfo(id="openai/gpt-4o", name="GPT-4o", provider="openai", tier="premium"),
+            ])
+
+        return models
