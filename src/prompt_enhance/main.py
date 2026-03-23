@@ -52,10 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Prompt Enhance API", version="0.1.0", lifespan=lifespan)
 
-settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
