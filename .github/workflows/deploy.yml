@@ -1,0 +1,45 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build API image
+        run: docker compose -f docker-compose.dev.yml build api
+
+      - name: Deploy API
+        run: docker compose -f docker-compose.dev.yml up -d api
+
+      - name: Wait for healthy
+        run: |
+          echo "Waiting for API to become healthy..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.dev.yml exec -T api python -c \
+              "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')" 2>/dev/null; then
+              echo "API is healthy."
+              exit 0
+            fi
+            echo "Attempt $i/30 — not ready yet..."
+            sleep 5
+          done
+          echo "API did not become healthy in time."
+          docker compose -f docker-compose.dev.yml logs --tail=50 api
+          exit 1
+
+      - name: Clean up old images
+        run: docker image prune -f
