@@ -68,8 +68,18 @@ app.include_router(usage.router)
 app.include_router(auth.router)
 
 
+def _cors_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin")
+    if origin:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    return {}
+
+
 @app.exception_handler(LLMServiceError)
-async def llm_error_handler(_request: Request, exc: LLMServiceError) -> JSONResponse:
+async def llm_error_handler(request: Request, exc: LLMServiceError) -> JSONResponse:
     status_map = {
         "authentication_error": 502,
         "rate_limit_error": 502,
@@ -80,15 +90,15 @@ async def llm_error_handler(_request: Request, exc: LLMServiceError) -> JSONResp
     }
     status_code = status_map.get(exc.code, 500)
     body = ErrorResponse(error=str(exc), code=exc.code, detail=exc.detail)
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(status_code=status_code, content=body.model_dump(), headers=_cors_headers(request))
 
 
 @app.exception_handler(Exception)
-async def global_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+async def global_error_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled exception")
     body = ErrorResponse(
         error="Internal server error",
         code="internal_error",
         detail=type(exc).__name__,
     )
-    return JSONResponse(status_code=500, content=body.model_dump())
+    return JSONResponse(status_code=500, content=body.model_dump(), headers=_cors_headers(request))
