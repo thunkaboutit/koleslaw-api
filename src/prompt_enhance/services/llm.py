@@ -49,6 +49,12 @@ class LLMService:
             {"role": "user", "content": request.prompt},
         ]
 
+    @staticmethod
+    def _log_llm_error(exc: Exception, model: str) -> None:
+        logging.getLogger(__name__).error(
+            "LLM call failed: model=%s, type=%s, error=%s", model, type(exc).__name__, exc
+        )
+
     def _map_exception(self, exc: Exception) -> LLMServiceError:
         if isinstance(exc, litellm.AuthenticationError):
             return LLMServiceError(str(exc), "authentication_error")
@@ -75,6 +81,7 @@ class LLMService:
                 num_retries=3,
             )
         except Exception as exc:
+            self._log_llm_error(exc, model)
             raise self._map_exception(exc) from exc
 
         return EnhanceResponse(
