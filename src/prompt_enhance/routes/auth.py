@@ -34,6 +34,7 @@ OAUTH_STATE_COOKIE = "pe_oauth_state"
 # Password hashing (stdlib only — no extra dependencies)
 # ---------------------------------------------------------------------------
 
+
 def _hash_password(password: str) -> str:
     """Hash a password with PBKDF2-SHA256 and a random salt."""
     salt = os.urandom(16)
@@ -56,6 +57,7 @@ def _verify_password(password: str, stored: str) -> bool:
 # Dev admin seed
 # ---------------------------------------------------------------------------
 
+
 async def ensure_dev_admin(request: Request, settings: Settings) -> None:
     """Create a default admin/admin user in development mode if it doesn't exist."""
     if settings.environment != "development":
@@ -63,9 +65,7 @@ async def ensure_dev_admin(request: Request, settings: Settings) -> None:
 
     db_session_factory = request.app.state.db_session_factory
     async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.email == "admin")
-        )
+        result = await session.execute(select(User).where(User.email == "admin"))
         if result.scalar_one_or_none() is not None:
             return
 
@@ -85,9 +85,8 @@ async def ensure_dev_admin(request: Request, settings: Settings) -> None:
 # Helper to build a session-cookie response
 # ---------------------------------------------------------------------------
 
-def _session_response(
-    user_id: uuid.UUID, settings: Settings, *, redirect_to: str | None = None
-) -> Response:
+
+def _session_response(user_id: uuid.UUID, settings: Settings, *, redirect_to: str | None = None) -> Response:
     token = create_session_token(user_id, settings)
     if redirect_to:
         response = Response(status_code=307, headers={"Location": redirect_to})
@@ -109,6 +108,7 @@ def _session_response(
 # Username / password login
 # ---------------------------------------------------------------------------
 
+
 @router.post("/login")
 async def login(
     request: Request,
@@ -120,9 +120,7 @@ async def login(
 
     db_session_factory = request.app.state.db_session_factory
     async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.email == body.username, User.oauth_provider == "local")
-        )
+        result = await session.execute(select(User).where(User.email == body.username, User.oauth_provider == "local"))
         user = result.scalar_one_or_none()
 
     if user is None or user.password_hash is None or not _verify_password(body.password, user.password_hash):
@@ -135,6 +133,7 @@ async def login(
 # GitHub OAuth
 # ---------------------------------------------------------------------------
 
+
 @router.get("/github")
 async def github_login(
     response: Response,
@@ -145,12 +144,7 @@ async def github_login(
 
     state = secrets.token_urlsafe(32)
 
-    redirect_url = (
-        f"{GITHUB_AUTHORIZE_URL}"
-        f"?client_id={settings.github_client_id}"
-        f"&scope=user:email"
-        f"&state={state}"
-    )
+    redirect_url = f"{GITHUB_AUTHORIZE_URL}?client_id={settings.github_client_id}&scope=user:email&state={state}"
 
     response = Response(status_code=307, headers={"Location": redirect_url})
     response.set_cookie(
@@ -217,9 +211,7 @@ async def github_callback(
     # Upsert user
     db_session_factory = request.app.state.db_session_factory
     async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.oauth_provider == "github", User.oauth_id == github_id)
-        )
+        result = await session.execute(select(User).where(User.oauth_provider == "github", User.oauth_id == github_id))
         user = result.scalar_one_or_none()
 
         if user is None:
@@ -238,9 +230,7 @@ async def github_callback(
             await session.commit()
 
     # Set session cookie and redirect to frontend
-    response = _session_response(
-        user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard"
-    )
+    response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
     response.delete_cookie(OAUTH_STATE_COOKIE)
     return response
 
@@ -248,6 +238,7 @@ async def github_callback(
 # ---------------------------------------------------------------------------
 # Session info / logout
 # ---------------------------------------------------------------------------
+
 
 @router.get("/me")
 async def get_me(

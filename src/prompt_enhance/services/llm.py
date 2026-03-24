@@ -140,14 +140,22 @@ class LLMService:
 
         # Add cloud provider models if API keys are configured
         if self._settings.anthropic_api_key:
-            models.extend([
-                ModelInfo(id="anthropic/claude-haiku-4-5", name="Claude Haiku 4.5", provider="anthropic", tier="fast"),
-                ModelInfo(id="anthropic/claude-sonnet-4-5", name="Claude Sonnet 4", provider="anthropic", tier="standard"),
-            ])
+            models.extend(
+                [
+                    ModelInfo(
+                        id="anthropic/claude-haiku-4-5", name="Claude Haiku 4.5", provider="anthropic", tier="fast"
+                    ),
+                    ModelInfo(
+                        id="anthropic/claude-sonnet-4-5", name="Claude Sonnet 4", provider="anthropic", tier="standard"
+                    ),
+                ]
+            )
         if self._settings.openai_api_key:
-            models.extend([
-                ModelInfo(id="openai/gpt-4o-mini", name="GPT-4o Mini", provider="openai", tier="fast"),
-                ModelInfo(id="openai/gpt-4o", name="GPT-4o", provider="openai", tier="premium"),
-            ])
+            models.extend(
+                [
+                    ModelInfo(id="openai/gpt-4o-mini", name="GPT-4o Mini", provider="openai", tier="fast"),
+                    ModelInfo(id="openai/gpt-4o", name="GPT-4o", provider="openai", tier="premium"),
+                ]
+            )
 
         return models
