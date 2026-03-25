@@ -14,9 +14,6 @@ jobs:
 
     steps:
       - name: Trigger koleslaw-kowpen deploy for API
-        run: |
-          curl -L -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.REPO_ACCESS_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/thunkaboutit/koleslaw-kowpen/dispatches \
-            -d '{"event_type":"deploy-api"}'
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        run: gh workflow run deploy.yml -R thunkaboutit/koleslaw-kowpen -f service=api
