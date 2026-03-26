@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Restore SSH remote
+        run: git remote set-url origin git@github.com:thunkaboutit/prompt-enhance.git
+
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -59,6 +62,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Restore SSH remote
+        run: git remote set-url origin git@github.com:thunkaboutit/prompt-enhance.git
 
       - uses: astral-sh/setup-uv@v6
         with:
