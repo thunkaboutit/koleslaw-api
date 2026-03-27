@@ -10,7 +10,7 @@ from redis.asyncio import Redis
 
 from prompt_enhance.config import get_settings
 from prompt_enhance.db.engine import async_session_factory, create_engine
-from prompt_enhance.routes import auth, enhance, health, keys, models, usage
+from prompt_enhance.routes import auth, chat, enhance, health, keys, models, usage
 from prompt_enhance.schemas.enhance import ErrorResponse
 from prompt_enhance.services.cache import PromptCache
 from prompt_enhance.services.llm import LLMService, LLMServiceError
@@ -63,6 +63,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(enhance.router)
+app.include_router(chat.router)
 app.include_router(keys.router)
 app.include_router(usage.router)
 app.include_router(auth.router)
