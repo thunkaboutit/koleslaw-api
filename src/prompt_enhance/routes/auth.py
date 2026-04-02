@@ -117,6 +117,56 @@ def _session_response(user_id: uuid.UUID, settings: Settings, *, redirect_to: st
 
 
 # ---------------------------------------------------------------------------
+# OAuth user upsert — shared across all social providers
+# ---------------------------------------------------------------------------
+
+
+async def _upsert_oauth_user(
+    db_session_factory,
+    *,
+    oauth_provider: str,
+    oauth_id: str,
+    email: str,
+    name: str,
+) -> User:
+    """Find or create a user for an OAuth sign-in.
+
+    Lookup order:
+      1. Exact match on oauth_provider + oauth_id  (returning user, same provider)
+      2. Match on email                             (same person, different provider)
+      3. Create a new user                          (first time)
+    """
+    async with db_session_factory() as session:
+        # 1. Exact provider match
+        result = await session.execute(
+            select(User).where(User.oauth_provider == oauth_provider, User.oauth_id == oauth_id)
+        )
+        user = result.scalar_one_or_none()
+
+        # 2. Cross-provider match by email
+        if user is None and email:
+            result = await session.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
+
+        if user is None:
+            # 3. Brand-new user
+            user = User(
+                oauth_provider=oauth_provider,
+                oauth_id=oauth_id,
+                email=email,
+                name=name,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.name = name
+            await session.commit()
+
+        return user
+
+
+# ---------------------------------------------------------------------------
 # Username / password login
 # ---------------------------------------------------------------------------
 
@@ -220,26 +270,13 @@ async def github_callback(
     github_id = str(gh_user["id"])
     name = gh_user.get("name") or gh_user.get("login", "")
 
-    # Upsert user
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(select(User).where(User.oauth_provider == "github", User.oauth_id == github_id))
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                oauth_provider="github",
-                oauth_id=github_id,
-                email=email,
-                name=name,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-        else:
-            user.email = email
-            user.name = name
-            await session.commit()
+    user = await _upsert_oauth_user(
+        request.app.state.db_session_factory,
+        oauth_provider="github",
+        oauth_id=github_id,
+        email=email,
+        name=name,
+    )
 
     # Set session cookie and redirect to frontend
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
@@ -327,25 +364,13 @@ async def google_callback(
     name = g_user.get("name", "")
     email = g_user.get("email", "")
 
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(select(User).where(User.oauth_provider == "google", User.oauth_id == google_id))
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                oauth_provider="google",
-                oauth_id=google_id,
-                email=email,
-                name=name,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-        else:
-            user.email = email
-            user.name = name
-            await session.commit()
+    user = await _upsert_oauth_user(
+        request.app.state.db_session_factory,
+        oauth_provider="google",
+        oauth_id=google_id,
+        email=email,
+        name=name,
+    )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
     response.delete_cookie(OAUTH_STATE_COOKIE)
@@ -429,27 +454,13 @@ async def facebook_callback(
     name = fb_user.get("name", "")
     email = fb_user.get("email", "")
 
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.oauth_provider == "facebook", User.oauth_id == facebook_id)
-        )
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                oauth_provider="facebook",
-                oauth_id=facebook_id,
-                email=email,
-                name=name,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-        else:
-            user.email = email
-            user.name = name
-            await session.commit()
+    user = await _upsert_oauth_user(
+        request.app.state.db_session_factory,
+        oauth_provider="facebook",
+        oauth_id=facebook_id,
+        email=email,
+        name=name,
+    )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
     response.delete_cookie(OAUTH_STATE_COOKIE)
@@ -538,27 +549,13 @@ async def instagram_callback(
     name = username
     email = f"{username}@instagram.oauth"
 
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.oauth_provider == "instagram", User.oauth_id == instagram_id)
-        )
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                oauth_provider="instagram",
-                oauth_id=instagram_id,
-                email=email,
-                name=name,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-        else:
-            user.email = email
-            user.name = name
-            await session.commit()
+    user = await _upsert_oauth_user(
+        request.app.state.db_session_factory,
+        oauth_provider="instagram",
+        oauth_id=instagram_id,
+        email=email,
+        name=name,
+    )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
     response.delete_cookie(OAUTH_STATE_COOKIE)
