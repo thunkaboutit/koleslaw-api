@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 86400
     github_client_id: str = ""
     github_client_secret: SecretStr | None = None
+    google_client_id: str = ""
+    google_client_secret: SecretStr | None = None
+    facebook_client_id: str = ""
+    facebook_client_secret: SecretStr | None = None
+    instagram_client_id: str = ""
+    instagram_client_secret: SecretStr | None = None
     frontend_url: str = "http://localhost:5173"
 
 

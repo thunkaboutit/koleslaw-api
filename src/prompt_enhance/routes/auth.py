@@ -27,6 +27,18 @@ GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
 GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
 
+GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USER_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+
+FACEBOOK_AUTHORIZE_URL = "https://www.facebook.com/v19.0/dialog/oauth"
+FACEBOOK_TOKEN_URL = "https://graph.facebook.com/v19.0/oauth/access_token"
+FACEBOOK_USER_URL = "https://graph.facebook.com/v19.0/me?fields=id,name,email"
+
+INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
+INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
+INSTAGRAM_USER_URL = "https://graph.instagram.com/me?fields=id,username"
+
 OAUTH_STATE_COOKIE = "pe_oauth_state"
 
 
@@ -230,6 +242,324 @@ async def github_callback(
             await session.commit()
 
     # Set session cookie and redirect to frontend
+    response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
+    response.delete_cookie(OAUTH_STATE_COOKIE)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth
+# ---------------------------------------------------------------------------
+
+
+@router.get("/google")
+async def google_login(
+    response: Response,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    if not settings.google_client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    state = secrets.token_urlsafe(32)
+
+    redirect_url = (
+        f"{GOOGLE_AUTHORIZE_URL}"
+        f"?client_id={settings.google_client_id}"
+        f"&redirect_uri={settings.frontend_url}/auth/google/callback"
+        f"&response_type=code"
+        f"&scope=openid%20email%20profile"
+        f"&state={state}"
+    )
+
+    response = Response(status_code=307, headers={"Location": redirect_url})
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment != "development",
+    )
+    return response
+
+
+@router.get("/google/callback")
+async def google_callback(
+    request: Request,
+    code: str,
+    state: str,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    if not settings.google_client_secret:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            json={
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret.get_secret_value(),
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": f"{settings.frontend_url}/auth/google/callback",
+            },
+            headers={"Accept": "application/json"},
+        )
+        token_data = token_resp.json()
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("Google token exchange failed: %s", token_data)
+        raise HTTPException(status_code=400, detail="Failed to authenticate with Google")
+
+    async with httpx.AsyncClient() as client:
+        user_resp = await client.get(
+            GOOGLE_USER_URL,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        g_user = user_resp.json()
+
+    google_id = str(g_user["id"])
+    name = g_user.get("name", "")
+    email = g_user.get("email", "")
+
+    db_session_factory = request.app.state.db_session_factory
+    async with db_session_factory() as session:
+        result = await session.execute(select(User).where(User.oauth_provider == "google", User.oauth_id == google_id))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                oauth_provider="google",
+                oauth_id=google_id,
+                email=email,
+                name=name,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.email = email
+            user.name = name
+            await session.commit()
+
+    response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
+    response.delete_cookie(OAUTH_STATE_COOKIE)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Facebook OAuth
+# ---------------------------------------------------------------------------
+
+
+@router.get("/facebook")
+async def facebook_login(
+    response: Response,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    if not settings.facebook_client_id:
+        raise HTTPException(status_code=500, detail="Facebook OAuth not configured")
+
+    state = secrets.token_urlsafe(32)
+
+    redirect_url = (
+        f"{FACEBOOK_AUTHORIZE_URL}"
+        f"?client_id={settings.facebook_client_id}"
+        f"&redirect_uri={settings.frontend_url}/auth/facebook/callback"
+        f"&scope=email,public_profile"
+        f"&state={state}"
+    )
+
+    response = Response(status_code=307, headers={"Location": redirect_url})
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment != "development",
+    )
+    return response
+
+
+@router.get("/facebook/callback")
+async def facebook_callback(
+    request: Request,
+    code: str,
+    state: str,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    if not settings.facebook_client_secret:
+        raise HTTPException(status_code=500, detail="Facebook OAuth not configured")
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.get(
+            FACEBOOK_TOKEN_URL,
+            params={
+                "client_id": settings.facebook_client_id,
+                "client_secret": settings.facebook_client_secret.get_secret_value(),
+                "code": code,
+                "redirect_uri": f"{settings.frontend_url}/auth/facebook/callback",
+            },
+        )
+        token_data = token_resp.json()
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("Facebook token exchange failed: %s", token_data)
+        raise HTTPException(status_code=400, detail="Failed to authenticate with Facebook")
+
+    async with httpx.AsyncClient() as client:
+        user_resp = await client.get(
+            FACEBOOK_USER_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        fb_user = user_resp.json()
+
+    facebook_id = str(fb_user["id"])
+    name = fb_user.get("name", "")
+    email = fb_user.get("email", "")
+
+    db_session_factory = request.app.state.db_session_factory
+    async with db_session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.oauth_provider == "facebook", User.oauth_id == facebook_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                oauth_provider="facebook",
+                oauth_id=facebook_id,
+                email=email,
+                name=name,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.email = email
+            user.name = name
+            await session.commit()
+
+    response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
+    response.delete_cookie(OAUTH_STATE_COOKIE)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Instagram OAuth
+# ---------------------------------------------------------------------------
+
+
+@router.get("/instagram")
+async def instagram_login(
+    response: Response,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    if not settings.instagram_client_id:
+        raise HTTPException(status_code=500, detail="Instagram OAuth not configured")
+
+    state = secrets.token_urlsafe(32)
+
+    redirect_url = (
+        f"{INSTAGRAM_AUTHORIZE_URL}"
+        f"?client_id={settings.instagram_client_id}"
+        f"&redirect_uri={settings.frontend_url}/auth/instagram/callback"
+        f"&scope=instagram_basic"
+        f"&response_type=code"
+        f"&state={state}"
+    )
+
+    response = Response(status_code=307, headers={"Location": redirect_url})
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment != "development",
+    )
+    return response
+
+
+@router.get("/instagram/callback")
+async def instagram_callback(
+    request: Request,
+    code: str,
+    state: str,
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> Response:
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    if not settings.instagram_client_secret:
+        raise HTTPException(status_code=500, detail="Instagram OAuth not configured")
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            INSTAGRAM_TOKEN_URL,
+            data={
+                "client_id": settings.instagram_client_id,
+                "client_secret": settings.instagram_client_secret.get_secret_value(),
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": f"{settings.frontend_url}/auth/instagram/callback",
+            },
+        )
+        token_data = token_resp.json()
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("Instagram token exchange failed: %s", token_data)
+        raise HTTPException(status_code=400, detail="Failed to authenticate with Instagram")
+
+    user_id_from_token = str(token_data.get("user_id", ""))
+
+    async with httpx.AsyncClient() as client:
+        user_resp = await client.get(
+            INSTAGRAM_USER_URL,
+            params={"access_token": access_token},
+        )
+        ig_user = user_resp.json()
+
+    instagram_id = str(ig_user.get("id", user_id_from_token))
+    username = ig_user.get("username", "")
+    name = username
+    email = f"{username}@instagram.oauth"
+
+    db_session_factory = request.app.state.db_session_factory
+    async with db_session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.oauth_provider == "instagram", User.oauth_id == instagram_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                oauth_provider="instagram",
+                oauth_id=instagram_id,
+                email=email,
+                name=name,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.email = email
+            user.name = name
+            await session.commit()
+
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
     response.delete_cookie(OAUTH_STATE_COOKIE)
     return response
