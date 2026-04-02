@@ -14,7 +14,9 @@ dependencies = [
     "asyncpg",
     "httpx",
     "PyJWT>=2.8.0",
+    "python-multipart",
     "ruff>=0.15.6",
+    "filetype>=1.2.0",
 ]
 
 [dependency-groups]

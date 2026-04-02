@@ -22,6 +22,9 @@ Built with FastAPI, LiteLLM, Redis, and PostgreSQL.
 | `GET`  | `/v1/models`       | No   | List available models          |
 | `POST` | `/v1/enhance`      | Yes  | Streaming enhancement (SSE)    |
 | `POST` | `/v1/enhance/sync` | Yes  | Synchronous enhancement (JSON) |
+| `POST` | `/v1/chat`         | Yes  | Chat streaming (SSE)           |
+| `POST` | `/v1/chat/upload`  | Yes  | Chat with file attachments (multipart SSE) |
+| `POST` | `/v1/chat/sync`    | Yes  | Synchronous chat (JSON)        |
 
 ## Quick Start
 
@@ -147,6 +150,24 @@ uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
 ```
 
+### File Upload (`/v1/chat/upload`)
+
+The upload endpoint accepts `multipart/form-data` with a JSON-encoded `messages` field and up to 5 file attachments.
+
+**Constraints:**
+- Allowed types: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.txt`, `.pdf`
+- Max file size: 10 MB per file
+- Max file count: 5 per request
+
+Files are converted to litellm-compatible content blocks: text files become inline text, images and PDFs become base64-encoded `image_url` blocks. These are attached to the last user message as a multimodal content array before being forwarded to the LLM provider.
+
+```bash
+curl -N http://localhost:8000/v1/chat/upload \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -F 'messages=[{"role":"user","content":"Describe this image"}]' \
+  -F 'files=@photo.png'
+```
+
 ### Project Structure
 
 ```
@@ -161,9 +182,11 @@ src/prompt_enhance/
 ├── routes/
 │   ├── health.py        # GET /v1/health
 │   ├── models.py        # GET /v1/models
-│   └── enhance.py       # POST /v1/enhance, /v1/enhance/sync
+│   ├── enhance.py       # POST /v1/enhance, /v1/enhance/sync
+│   └── chat.py          # POST /v1/chat, /v1/chat/upload, /v1/chat/sync
 ├── schemas/
-│   └── enhance.py       # Pydantic request/response models
+│   ├── enhance.py       # Enhancement request/response models
+│   └── chat.py          # Chat request/response models
 └── services/
     ├── auth.py          # API key auth and rate limiting
     ├── cache.py         # Exact-match prompt cache
