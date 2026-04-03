@@ -30,6 +30,8 @@ services:
       OLLAMA_BASE_URL: "http://192.168.0.222:11434"
       GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"
       GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
     depends_on:
       postgres:
         condition: service_healthy
