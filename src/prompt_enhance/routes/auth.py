@@ -167,6 +167,28 @@ async def _upsert_oauth_user(
 
 
 # ---------------------------------------------------------------------------
+# Configured providers
+# ---------------------------------------------------------------------------
+
+
+@router.get("/providers")
+async def get_providers(
+    settings: Settings = Depends(get_settings),  # noqa: B008
+) -> list[str]:
+    """Return the list of OAuth provider IDs that have a client_id configured."""
+    providers: list[str] = []
+    if settings.github_client_id:
+        providers.append("github")
+    if settings.google_client_id:
+        providers.append("google")
+    if settings.facebook_client_id:
+        providers.append("facebook")
+    if settings.instagram_client_id:
+        providers.append("instagram")
+    return providers
+
+
+# ---------------------------------------------------------------------------
 # Username / password login
 # ---------------------------------------------------------------------------
 

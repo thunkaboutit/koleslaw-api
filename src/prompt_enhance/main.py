@@ -33,6 +33,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("  frontend_url   = %s", settings.frontend_url)
     logger.info("  cors_origins   = %s", settings.cors_origins)
     logger.info("  github_oauth   = %s", "configured" if settings.github_client_id else "not configured")
+    logger.info("  google_oauth   = %s", "configured" if settings.google_client_id else "not configured")
+    logger.info("  facebook_oauth = %s", "configured" if settings.facebook_client_id else "not configured")
+    logger.info("  instagram_oauth= %s", "configured" if settings.instagram_client_id else "not configured")
 
     engine = create_engine(settings.database_url)
     app.state.db_engine = engine
