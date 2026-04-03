@@ -1,8 +1,11 @@
 import base64
 import json
 import logging
+import time
+import uuid
 
 import filetype
+import litellm
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from litellm import acompletion
@@ -11,6 +14,7 @@ from pydantic import ValidationError
 from prompt_enhance.prompts.system import get_chat_system_prompt
 from prompt_enhance.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
 from prompt_enhance.services.auth import get_current_api_key
+from prompt_enhance.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +124,7 @@ def _build_messages_with_files(
 
 # ── Streaming helper ─────────────────────────────────────────────────
 
-async def _stream_chat(model: str, messages: list[dict]):
+async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
     """Shared SSE generator used by both endpoints."""
     try:
         response = await acompletion(
@@ -133,6 +137,8 @@ async def _stream_chat(model: str, messages: list[dict]):
             delta = chunk.choices[0].delta.content or ""
             finish_reason = chunk.choices[0].finish_reason
             if delta or finish_reason:
+                if delta:
+                    collected.append(delta)
                 chat_chunk = ChatChunk(delta=delta, finish_reason=finish_reason)
                 yield _sse_event(chat_chunk.model_dump_json())
         yield _sse_event("[DONE]")
@@ -149,16 +155,40 @@ async def _stream_chat(model: str, messages: list[dict]):
 async def chat_stream(
     request: Request,
     body: ChatRequest,
-    _api_key: str | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
 ) -> StreamingResponse:
     model = body.model or request.app.state.settings.default_model
     messages = _build_messages(body)
+    collected: list[str] = []
+    start = time.monotonic()
 
-    return StreamingResponse(
-        _stream_chat(model, messages),
+    async def after_stream():
+        latency_ms = int((time.monotonic() - start) * 1000)
+        full_response = "".join(collected)
+        try:
+            input_tokens = litellm.token_counter(model=model, messages=messages)
+            output_tokens = litellm.token_counter(model=model, text=full_response)
+        except Exception:
+            input_tokens = 0
+            output_tokens = 0
+        await log_usage(
+            request.app.state.db_session_factory,
+            api_key_id,
+            model,
+            "chat",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached=False,
+            latency_ms=latency_ms,
+        )
+
+    response = StreamingResponse(
+        _stream_chat(model, messages, collected),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+    response.background = after_stream  # type: ignore[assignment]
+    return response
 
 
 @router.post("/chat/upload")
@@ -168,7 +198,7 @@ async def chat_stream_with_files(
     files: list[UploadFile] = File(default=[]),  # noqa: B008
     model: str | None = Form(default=None),
     context: str | None = Form(default=None),
-    _api_key: str | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
 ) -> StreamingResponse:
     """Chat endpoint that accepts file attachments via multipart/form-data.
 
@@ -196,35 +226,75 @@ async def chat_stream_with_files(
     body = ChatRequest(messages=parsed_messages, model=model, context=context)
     resolved_model = body.model or request.app.state.settings.default_model
     llm_messages = _build_messages_with_files(body, file_blocks)
+    collected: list[str] = []
+    start = time.monotonic()
 
-    return StreamingResponse(
-        _stream_chat(resolved_model, llm_messages),
+    async def after_stream():
+        latency_ms = int((time.monotonic() - start) * 1000)
+        full_response = "".join(collected)
+        try:
+            input_tokens = litellm.token_counter(model=resolved_model, messages=llm_messages)
+            output_tokens = litellm.token_counter(model=resolved_model, text=full_response)
+        except Exception:
+            input_tokens = 0
+            output_tokens = 0
+        await log_usage(
+            request.app.state.db_session_factory,
+            api_key_id,
+            resolved_model,
+            "chat",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached=False,
+            latency_ms=latency_ms,
+        )
+
+    response = StreamingResponse(
+        _stream_chat(resolved_model, llm_messages, collected),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+    response.background = after_stream  # type: ignore[assignment]
+    return response
 
 
 @router.post("/chat/sync")
 async def chat_sync(
     request: Request,
     body: ChatRequest,
-    _api_key: str | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
 ) -> ChatResponse:
     model = body.model or request.app.state.settings.default_model
     messages = _build_messages(body)
 
+    start = time.monotonic()
     response = await acompletion(
         model=model,
         messages=messages,
         num_retries=3,
     )
+    latency_ms = int((time.monotonic() - start) * 1000)
 
     content = response.choices[0].message.content
+    input_tokens = response.usage.prompt_tokens
+    output_tokens = response.usage.completion_tokens
+
+    await log_usage(
+        request.app.state.db_session_factory,
+        api_key_id,
+        model,
+        "chat",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cached=False,
+        latency_ms=latency_ms,
+    )
+
     return ChatResponse(
         message=ChatMessage(role="assistant", content=content),
         model_used=model,
         usage={
-            "input_tokens": response.usage.prompt_tokens,
-            "output_tokens": response.usage.completion_tokens,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         },
     )

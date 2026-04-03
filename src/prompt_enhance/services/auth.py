@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import uuid
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -52,7 +53,7 @@ async def get_current_api_key(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
     settings: Settings = Depends(get_settings),  # noqa: B008
-) -> str | None:
+) -> uuid.UUID | None:
     redis: Redis = request.app.state.redis
 
     if credentials is None:
@@ -91,4 +92,4 @@ async def get_current_api_key(
         )
 
     request.state.rate_limit_remaining = remaining
-    return key_hash
+    return api_key_row.id
