@@ -1,6 +1,4 @@
-import hashlib
 import logging
-import os
 import secrets
 import uuid
 
@@ -10,7 +8,7 @@ from sqlalchemy import select
 
 from prompt_enhance.config import Settings, get_settings
 from prompt_enhance.db.models import User
-from prompt_enhance.schemas.auth import LoginRequest, UserInfo
+from prompt_enhance.schemas.auth import UserInfo
 from prompt_enhance.services.session_auth import (
     SESSION_COOKIE,
     SESSION_MAX_AGE,
@@ -40,57 +38,6 @@ INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
 INSTAGRAM_USER_URL = "https://graph.instagram.com/me?fields=id,username"
 
 OAUTH_STATE_COOKIE = "pe_oauth_state"
-
-
-# ---------------------------------------------------------------------------
-# Password hashing (stdlib only — no extra dependencies)
-# ---------------------------------------------------------------------------
-
-
-def _hash_password(password: str) -> str:
-    """Hash a password with PBKDF2-SHA256 and a random salt."""
-    salt = os.urandom(16)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations=600_000)
-    return f"{salt.hex()}:{dk.hex()}"
-
-
-def _verify_password(password: str, stored: str) -> bool:
-    """Verify a password against a stored salt:hash string."""
-    try:
-        salt_hex, hash_hex = stored.split(":", 1)
-        salt = bytes.fromhex(salt_hex)
-        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations=600_000)
-        return secrets.compare_digest(dk.hex(), hash_hex)
-    except (ValueError, AttributeError):
-        return False
-
-
-# ---------------------------------------------------------------------------
-# Dev admin seed
-# ---------------------------------------------------------------------------
-
-
-async def ensure_dev_admin(request: Request, settings: Settings) -> None:
-    """Create a default admin/admin user in development mode if it doesn't exist."""
-    if settings.environment != "development":
-        return
-
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(select(User).where(User.email == "admin"))
-        if result.scalar_one_or_none() is not None:
-            return
-
-        admin = User(
-            email="admin",
-            name="Admin",
-            oauth_provider="local",
-            oauth_id="",
-            password_hash=_hash_password("admin"),
-        )
-        session.add(admin)
-        await session.commit()
-        logger.info("Created default dev admin user (admin/admin)")
 
 
 # ---------------------------------------------------------------------------
@@ -186,31 +133,6 @@ async def get_providers(
     if settings.instagram_client_id:
         providers.append("instagram")
     return providers
-
-
-# ---------------------------------------------------------------------------
-# Username / password login
-# ---------------------------------------------------------------------------
-
-
-@router.post("/login")
-async def login(
-    request: Request,
-    body: LoginRequest,
-    settings: Settings = Depends(get_settings),  # noqa: B008
-) -> Response:
-    # Seed the dev admin on first login attempt (idempotent)
-    await ensure_dev_admin(request, settings)
-
-    db_session_factory = request.app.state.db_session_factory
-    async with db_session_factory() as session:
-        result = await session.execute(select(User).where(User.email == body.username, User.oauth_provider == "local"))
-        user = result.scalar_one_or_none()
-
-    if user is None or user.password_hash is None or not _verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    return _session_response(user.id, settings)
 
 
 # ---------------------------------------------------------------------------
