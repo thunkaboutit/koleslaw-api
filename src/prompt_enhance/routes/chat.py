@@ -134,8 +134,14 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
             num_retries=3,
         )
         async for chunk in response:
-            delta = chunk.choices[0].delta.content or ""
-            finish_reason = chunk.choices[0].finish_reason
+            choice = chunk.choices[0]
+            delta = choice.delta.content or ""
+            reasoning = getattr(choice.delta, "reasoning_content", None) or ""
+            finish_reason = choice.finish_reason
+
+            if reasoning:
+                thinking_chunk = ChatChunk(delta=reasoning, type="thinking")
+                yield _sse_event(thinking_chunk.model_dump_json())
             if delta or finish_reason:
                 if delta:
                     collected.append(delta)

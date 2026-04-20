@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -15,6 +17,7 @@ class ChatRequest(BaseModel):
 class ChatChunk(BaseModel):
     delta: str
     finish_reason: str | None = None
+    type: Literal["text", "thinking"] = "text"
 
 
 class ChatResponse(BaseModel):
