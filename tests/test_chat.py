@@ -134,12 +134,7 @@ async def test_chat_stream_without_thinking(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_chat_stream_thinking_not_in_collected(client: AsyncClient) -> None:
     """Reasoning content should not be included in the collected output used for usage logging."""
-    collected_ref: list[str] = []
-
-    original_stream_chat = None
-
-    # We need to intercept the collected list to verify its contents.
-    # Patch acompletion and capture what goes into collected via the SSE output.
+    # We verify via SSE output: text-type deltas should only contain content, not reasoning.
     with patch("prompt_enhance.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_stream_with_thinking()
         response = await client.post(
