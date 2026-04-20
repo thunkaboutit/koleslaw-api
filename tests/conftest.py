@@ -69,7 +69,7 @@ async def client(
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
-    from prompt_enhance.routes import enhance, health, models
+    from prompt_enhance.routes import chat, enhance, health, models
     from prompt_enhance.schemas.enhance import ErrorResponse
     from prompt_enhance.services.auth import get_current_api_key
     from prompt_enhance.services.llm import LLMServiceError
@@ -90,6 +90,7 @@ async def client(
     app.include_router(health.router)
     app.include_router(models.router)
     app.include_router(enhance.router)
+    app.include_router(chat.router)
 
     app.dependency_overrides[get_current_api_key] = lambda: None
     app.dependency_overrides[get_settings] = lambda: settings
