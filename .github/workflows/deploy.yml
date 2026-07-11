@@ -1,19 +1,94 @@
+# Build the API image, push to ECR, and roll the ECS service — pinned by
+# image digest so every task in the deployment runs the identical image
+# (rollback = redeploy the previous task-definition revision).
+#
+# Auth is GitHub OIDC → the koleslaw-deploy-api IAM role (created by the
+# cicd unit in thunkaboutit/koleslaw-kowpen). Requires the repo variable
+# AWS_ACCOUNT_ID to be set.
 name: Deploy
 
 on:
   workflow_run:
-    workflows: [ CI ]
-    types: [ completed ]
-    branches: [ main ]
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: koleslaw-prod-api
+  ECS_CLUSTER: koleslaw-prod
+  ECS_SERVICE: koleslaw-prod-api
+  TASK_FAMILY: koleslaw-prod-api
+  CONTAINER_NAME: api
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 jobs:
-  trigger-deploy:
-    runs-on: self-hosted
-    environment: dev
+  deploy:
+    runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
 
     steps:
-      - name: Trigger koleslaw-kowpen deploy for API
+      - uses: actions/checkout@v4
+        with:
+          # Build exactly the commit CI validated.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/koleslaw-deploy-api
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: build
         env:
-          GH_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-        run: gh workflow run deploy.yml -R thunkaboutit/koleslaw-kowpen -f service=api
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          docker build \
+            -t "$REGISTRY/$ECR_REPOSITORY:$SHA" \
+            -t "$REGISTRY/$ECR_REPOSITORY:latest" \
+            .
+          docker push "$REGISTRY/$ECR_REPOSITORY:$SHA"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$SHA" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          echo "image=$REGISTRY/$ECR_REPOSITORY@$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --query taskDefinition > task-definition.json
+
+      - name: Pin new image digest into task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build.outputs.image }}
+
+      - name: Register revision and deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          wait-for-service-stability: true
