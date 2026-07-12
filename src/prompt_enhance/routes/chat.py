@@ -56,6 +56,7 @@ def _build_messages(body: ChatRequest) -> list[dict[str, str]]:
 
 # ── File helpers ─────────────────────────────────────────────────────
 
+
 async def _read_and_validate(upload: UploadFile) -> tuple[bytes, str]:
     """Read file bytes, enforce size limit, detect MIME via magic bytes, and block archives.
 
@@ -124,6 +125,7 @@ def _build_messages_with_files(
 
 # ── Streaming helper ─────────────────────────────────────────────────
 
+
 async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
     """Shared SSE generator used by both endpoints."""
     try:
@@ -156,6 +158,7 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
 
 
 # ── Endpoints ────────────────────────────────────────────────────────
+
 
 @router.post("/chat")
 async def chat_stream(

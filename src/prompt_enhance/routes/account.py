@@ -96,9 +96,7 @@ async def export_data(
     db_session_factory = request.app.state.db_session_factory
 
     async with db_session_factory() as session:
-        result = await session.execute(
-            select(User).where(User.id == user_id).options(selectinload(User.api_keys))
-        )
+        result = await session.execute(select(User).where(User.id == user_id).options(selectinload(User.api_keys)))
         user = result.scalar_one_or_none()
 
         if user is None:
@@ -119,9 +117,7 @@ async def export_data(
         usage_logs: list[ExportUsageEntry] = []
         if key_ids:
             usage_result = await session.execute(
-                select(UsageLog)
-                .where(UsageLog.api_key_id.in_(key_ids))
-                .order_by(UsageLog.timestamp.desc())
+                select(UsageLog).where(UsageLog.api_key_id.in_(key_ids)).order_by(UsageLog.timestamp.desc())
             )
             usage_logs = [
                 ExportUsageEntry(
@@ -185,9 +181,7 @@ async def delete_account(
         key_ids = [row[0] for row in key_result.all()]
 
         if key_ids:
-            usage_result = await session.execute(
-                select(UsageLog).where(UsageLog.api_key_id.in_(key_ids))
-            )
+            usage_result = await session.execute(select(UsageLog).where(UsageLog.api_key_id.in_(key_ids)))
             for log in usage_result.scalars().all():
                 await session.delete(log)
 

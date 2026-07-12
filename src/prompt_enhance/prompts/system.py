@@ -128,11 +128,7 @@ CHAT_SYSTEM_PROMPT = (
 def get_chat_system_prompt(context: str | None = None) -> str:
     prompt = CHAT_SYSTEM_PROMPT
     if context:
-        prompt += (
-            "\n--- Additional Context ---\n"
-            "The user has provided the following context:\n\n"
-            f"{context}"
-        )
+        prompt += f"\n--- Additional Context ---\nThe user has provided the following context:\n\n{context}"
     return prompt
 
 
