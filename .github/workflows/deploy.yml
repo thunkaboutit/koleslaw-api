@@ -12,6 +12,9 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  # Manual deploys: dispatch from main — the IAM role only trusts
+  # refs/heads/main, so a run from any other branch fails AWS auth.
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -32,13 +35,14 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # Build exactly the commit CI validated.
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # CI-triggered: build exactly the commit CI validated.
+          # Manual dispatch: build the head of the dispatched ref.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -54,7 +58,7 @@ jobs:
         id: build
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
           docker build \
