@@ -43,6 +43,21 @@ class LLMService:
         return request.enhancement_type
 
     def _build_messages(self, request: EnhanceRequest, resolved_type: str) -> list[dict[str, str]]:
+        # Ollama-served models define their SYSTEM prompt in the Modelfile
+        # (kept next to the weights in the model repo / S3). Sending no
+        # system message lets it apply — a request-level one would override
+        # it. Cloud fallback models have no Modelfile, so they still get the
+        # per-type prompt; without it they'd answer the prompt instead of
+        # enhancing it.
+        if self._resolve_model(request).startswith("ollama_chat/"):
+            content = request.prompt
+            if request.context:
+                content += (
+                    "\n\n--- Additional Context ---\n"
+                    "Context about the use case, to inform enhancement "
+                    f"decisions:\n\n{request.context}"
+                )
+            return [{"role": "user", "content": content}]
         system_prompt = get_system_prompt(resolved_type, request.context)
         return [
             {"role": "system", "content": system_prompt},

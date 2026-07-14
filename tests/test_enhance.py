@@ -84,3 +84,52 @@ async def test_enhance_sync_missing_prompt(client: AsyncClient) -> None:
         json={"enhancement_type": "refine"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_enhance_ollama_model_gets_no_system_prompt(client: AsyncClient) -> None:
+    """Ollama models carry their SYSTEM prompt in the Modelfile — the API
+    must not send one (a request-level system message would override it)."""
+    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    assert response.status_code == 200
+    messages = mock_llm.call_args.kwargs["messages"]
+    assert [m["role"] for m in messages] == ["user"]
+    assert messages[0]["content"] == "Write a poem"
+
+
+@pytest.mark.asyncio
+async def test_enhance_ollama_model_context_folds_into_user_message(client: AsyncClient) -> None:
+    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "context": "for a wedding toast"},
+        )
+    assert response.status_code == 200
+    messages = mock_llm.call_args.kwargs["messages"]
+    assert [m["role"] for m in messages] == ["user"]
+    assert messages[0]["content"].startswith("Write a poem")
+    assert "for a wedding toast" in messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_enhance_cloud_model_keeps_system_prompt(client: AsyncClient) -> None:
+    """Cloud fallback models have no Modelfile — they still need ours."""
+    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={
+                "prompt": "Write a poem",
+                "enhancement_type": "refine",
+                "model": "anthropic/claude-haiku-4-5",
+            },
+        )
+    assert response.status_code == 200
+    messages = mock_llm.call_args.kwargs["messages"]
+    assert [m["role"] for m in messages] == ["system", "user"]
