@@ -133,3 +133,32 @@ async def test_enhance_cloud_model_keeps_system_prompt(client: AsyncClient) -> N
     assert response.status_code == 200
     messages = mock_llm.call_args.kwargs["messages"]
     assert [m["role"] for m in messages] == ["system", "user"]
+
+
+@pytest.mark.asyncio
+async def test_enhance_stream_emits_keepalive_during_stall(client: AsyncClient, monkeypatch) -> None:
+    """A silent thinking phase must not leave the SSE connection byteless —
+    Cloudflare kills proxied connections after 100s of silence."""
+    import asyncio as aio
+
+    from prompt_enhance.routes import enhance as enhance_route
+
+    monkeypatch.setattr(enhance_route, "KEEPALIVE_SECONDS", 0.05)
+
+    async def _slow_stream():
+        await aio.sleep(0.2)  # stall longer than the keepalive window
+        yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Enhanced"), finish_reason=None)])
+        yield MagicMock(choices=[MagicMock(delta=MagicMock(content=""), finish_reason="stop")])
+
+    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _slow_stream()
+        response = await client.post(
+            "/v1/enhance",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    assert response.status_code == 200
+    assert response.text.startswith(": connected")
+    assert ": keepalive" in response.text
+    lines = response.text.strip().split("\n\n")
+    assert any("Enhanced" in line for line in lines)
+    assert lines[-1] == "data: [DONE]"
