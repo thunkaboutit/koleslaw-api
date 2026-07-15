@@ -24,6 +24,20 @@ class LLMServiceError(Exception):
         self.detail = detail
 
 
+# Failures that mean the backend serving the model is unreachable or not
+# serving it right now — worth retrying on another tier, unlike auth or
+# bad-request errors, which would fail identically anywhere. NotFoundError
+# counts: a GPU instance that lost its model registration answers 404, which
+# says nothing about whether a cloud model can take the request.
+_AVAILABILITY_ERRORS = (
+    litellm.Timeout,
+    litellm.APIConnectionError,
+    litellm.ServiceUnavailableError,
+    litellm.InternalServerError,
+    litellm.NotFoundError,
+)
+
+
 class LLMService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -42,14 +56,14 @@ class LLMService:
             return classify_enhancement_type(request.prompt)
         return request.enhancement_type
 
-    def _build_messages(self, request: EnhanceRequest, resolved_type: str) -> list[dict[str, str]]:
+    def _build_messages(self, request: EnhanceRequest, resolved_type: str, model: str) -> list[dict[str, str]]:
         # Ollama-served models define their SYSTEM prompt in the Modelfile
         # (kept next to the weights in the model repo / S3). Sending no
         # system message lets it apply — a request-level one would override
         # it. Cloud fallback models have no Modelfile, so they still get the
         # per-type prompt; without it they'd answer the prompt instead of
         # enhancing it.
-        if self._resolve_model(request).startswith("ollama_chat/"):
+        if model.startswith("ollama_chat/"):
             content = request.prompt
             if request.context:
                 content += (
@@ -70,6 +84,30 @@ class LLMService:
             "LLM call failed: model=%s, type=%s, error=%s", model, type(exc).__name__, exc
         )
 
+    def _fall_back_or_raise(self, model: str, exc: Exception) -> str:
+        """Return the fallback model for an availability failure on the local
+        tier, or raise the mapped error.
+
+        A GPU instance replacement (deploy, future spot reclaim) is a ~4 min
+        serving gap; requests degrade to the configured cloud model instead
+        of surfacing it. Only ollama_chat/* primaries qualify — a cloud
+        model failing is not an availability problem another cloud model
+        is likely to dodge, and its errors should stay visible.
+        """
+        self._log_llm_error(exc, model)
+        fallback = self._settings.fallback_model
+        if (
+            not fallback
+            or fallback == model
+            or not model.startswith("ollama_chat/")
+            or not isinstance(exc, _AVAILABILITY_ERRORS)
+        ):
+            raise self._map_exception(exc) from exc
+        logging.getLogger(__name__).warning(
+            "Model %s unavailable (%s); falling back to %s", model, type(exc).__name__, fallback
+        )
+        return fallback
+
     def _map_exception(self, exc: Exception) -> LLMServiceError:
         if isinstance(exc, litellm.AuthenticationError):
             return LLMServiceError(str(exc), "authentication_error")
@@ -88,16 +126,23 @@ class LLMService:
     async def enhance(self, request: EnhanceRequest, resolved_type: str | None = None) -> EnhanceResponse:
         model = self._resolve_model(request)
         resolved = resolved_type or self.resolve_enhancement_type(request)
-        messages = self._build_messages(request, resolved)
         try:
             response = await acompletion(
                 model=model,
-                messages=messages,
+                messages=self._build_messages(request, resolved, model),
                 num_retries=3,
             )
         except Exception as exc:
-            self._log_llm_error(exc, model)
-            raise self._map_exception(exc) from exc
+            model = self._fall_back_or_raise(model, exc)
+            try:
+                response = await acompletion(
+                    model=model,
+                    messages=self._build_messages(request, resolved, model),
+                    num_retries=3,
+                )
+            except Exception as fallback_exc:
+                self._log_llm_error(fallback_exc, model)
+                raise self._map_exception(fallback_exc) from fallback_exc
 
         return EnhanceResponse(
             enhanced_prompt=response.choices[0].message.content,
@@ -113,16 +158,28 @@ class LLMService:
     ) -> AsyncGenerator[EnhanceChunk, None]:
         model = self._resolve_model(request)
         resolved = resolved_type or self.resolve_enhancement_type(request)
-        messages = self._build_messages(request, resolved)
         try:
             response = await acompletion(
                 model=model,
-                messages=messages,
+                messages=self._build_messages(request, resolved, model),
                 stream=True,
                 num_retries=3,
             )
         except Exception as exc:
-            raise self._map_exception(exc) from exc
+            # Fallback only engages before the first byte reaches the
+            # client; a mid-stream failure can't be retried without
+            # duplicating output, so it propagates as before.
+            model = self._fall_back_or_raise(model, exc)
+            try:
+                response = await acompletion(
+                    model=model,
+                    messages=self._build_messages(request, resolved, model),
+                    stream=True,
+                    num_retries=3,
+                )
+            except Exception as fallback_exc:
+                self._log_llm_error(fallback_exc, model)
+                raise self._map_exception(fallback_exc) from fallback_exc
 
         async for chunk in response:
             delta = chunk.choices[0].delta.content or ""
