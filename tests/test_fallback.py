@@ -90,9 +90,7 @@ async def test_sync_falls_back_on_model_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_bad_request_does_not_fall_back(client: AsyncClient) -> None:
     with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
-        mock_llm.side_effect = litellm.BadRequestError(
-            message="bad request", llm_provider="ollama", model=LOCAL
-        )
+        mock_llm.side_effect = litellm.BadRequestError(message="bad request", llm_provider="ollama", model=LOCAL)
         response = await client.post(
             "/v1/enhance/sync",
             json={"prompt": "Write a poem", "enhancement_type": "refine"},
