@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     ollama_base_url: str = "http://localhost:11434"
     default_model: str = "ollama_chat/prompt-enhance-14b-think"
+    fallback_model: str | None = None
     environment: Literal["development", "staging", "production"] = "development"
     api_key_hash_secret: SecretStr = SecretStr("api_key_hash_secret_change_me_development")
     session_secret: SecretStr = SecretStr("session_secret_change_me_development")
