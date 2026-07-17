@@ -14,7 +14,7 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/prompt_enhance
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/koleslaw_api
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -25,7 +25,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: prompt_enhance
+      POSTGRES_DB: koleslaw_api
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:

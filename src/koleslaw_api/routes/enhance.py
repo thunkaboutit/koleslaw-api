@@ -7,11 +7,11 @@ import litellm
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from prompt_enhance.schemas.enhance import EnhanceRequest, EnhanceResponse
-from prompt_enhance.services.auth import get_current_api_key
-from prompt_enhance.services.cache import PromptCache
-from prompt_enhance.services.llm import LLMService
-from prompt_enhance.services.usage import log_usage
+from koleslaw_api.schemas.enhance import EnhanceRequest, EnhanceResponse
+from koleslaw_api.services.auth import get_current_api_key
+from koleslaw_api.services.cache import PromptCache
+from koleslaw_api.services.llm import LLMService
+from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
 

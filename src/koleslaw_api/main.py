@@ -8,12 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
-from prompt_enhance.config import get_settings
-from prompt_enhance.db.engine import async_session_factory, create_engine
-from prompt_enhance.routes import account, auth, chat, enhance, health, keys, models, usage
-from prompt_enhance.schemas.enhance import ErrorResponse
-from prompt_enhance.services.cache import PromptCache
-from prompt_enhance.services.llm import LLMService, LLMServiceError
+from koleslaw_api.config import get_settings
+from koleslaw_api.db.engine import async_session_factory, create_engine
+from koleslaw_api.routes import account, auth, chat, enhance, health, keys, models, usage
+from koleslaw_api.schemas.enhance import ErrorResponse
+from koleslaw_api.services.cache import PromptCache
+from koleslaw_api.services.llm import LLMService, LLMServiceError
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s:     %(name)s - %(message)s")
 logger = logging.getLogger(__name__)

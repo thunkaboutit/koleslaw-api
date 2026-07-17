@@ -11,10 +11,10 @@ from fastapi.responses import StreamingResponse
 from litellm import acompletion
 from pydantic import ValidationError
 
-from prompt_enhance.prompts.system import get_chat_system_prompt
-from prompt_enhance.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
-from prompt_enhance.services.auth import get_current_api_key
-from prompt_enhance.services.usage import log_usage
+from koleslaw_api.prompts.system import get_chat_system_prompt
+from koleslaw_api.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
+from koleslaw_api.services.auth import get_current_api_key
+from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
 

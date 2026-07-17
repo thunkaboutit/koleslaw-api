@@ -85,7 +85,7 @@ def _parse_sse_chunks(text: str) -> list[dict]:
 @pytest.mark.asyncio
 async def test_chat_stream_with_thinking_chunks(client: AsyncClient) -> None:
     """Thinking chunks should have type='thinking', content chunks type='text'."""
-    with patch("prompt_enhance.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_stream_with_thinking()
         response = await client.post(
             "/v1/chat",
@@ -111,7 +111,7 @@ async def test_chat_stream_with_thinking_chunks(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_chat_stream_without_thinking(client: AsyncClient) -> None:
     """Models without reasoning_content should emit only type='text' chunks."""
-    with patch("prompt_enhance.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_stream_no_thinking()
         response = await client.post(
             "/v1/chat",
@@ -135,7 +135,7 @@ async def test_chat_stream_without_thinking(client: AsyncClient) -> None:
 async def test_chat_stream_thinking_not_in_collected(client: AsyncClient) -> None:
     """Reasoning content should not be included in the collected output used for usage logging."""
     # We verify via SSE output: text-type deltas should only contain content, not reasoning.
-    with patch("prompt_enhance.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_stream_with_thinking()
         response = await client.post(
             "/v1/chat",

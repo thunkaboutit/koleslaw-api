@@ -32,7 +32,7 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: prompt_enhance_test
+          POSTGRES_DB: koleslaw_api_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
@@ -53,7 +53,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/prompt_enhance_test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/koleslaw_api_test
       REDIS_URL: redis://localhost:6379/0
       API_KEY_HASH_SECRET: ci-test-secret
       ENVIRONMENT: development

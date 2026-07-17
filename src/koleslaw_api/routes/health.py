@@ -4,13 +4,13 @@ from importlib.metadata import version
 from fastapi import APIRouter, Request
 from sqlalchemy import text
 
-from prompt_enhance.schemas.enhance import HealthResponse
+from koleslaw_api.schemas.enhance import HealthResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["health"])
 
-APP_VERSION = version("prompt-enhance")
+APP_VERSION = version("koleslaw-api")
 
 
 @router.get("/health")

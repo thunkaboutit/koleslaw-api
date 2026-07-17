@@ -1,7 +1,7 @@
 import logging
 import uuid
 
-from prompt_enhance.db.models import UsageLog
+from koleslaw_api.db.models import UsageLog
 
 logger = logging.getLogger(__name__)
 

@@ -25,7 +25,7 @@ async def _fake_stream():
 
 @pytest.mark.asyncio
 async def test_enhance_sync_returns_response(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_completion()
         response = await client.post(
             "/v1/enhance/sync",
@@ -41,7 +41,7 @@ async def test_enhance_sync_returns_response(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_enhance_stream_returns_sse(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_stream()
         response = await client.post(
             "/v1/enhance",
@@ -58,7 +58,7 @@ async def test_enhance_stream_returns_sse(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_enhance_sync_auto_type(client: AsyncClient) -> None:
     """When enhancement_type is auto (the default), the request should succeed."""
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_completion()
         response = await client.post(
             "/v1/enhance/sync",
@@ -90,7 +90,7 @@ async def test_enhance_sync_missing_prompt(client: AsyncClient) -> None:
 async def test_enhance_ollama_model_gets_no_system_prompt(client: AsyncClient) -> None:
     """Ollama models carry their SYSTEM prompt in the Modelfile — the API
     must not send one (a request-level system message would override it)."""
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_completion()
         response = await client.post(
             "/v1/enhance/sync",
@@ -104,7 +104,7 @@ async def test_enhance_ollama_model_gets_no_system_prompt(client: AsyncClient) -
 
 @pytest.mark.asyncio
 async def test_enhance_ollama_model_context_folds_into_user_message(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_completion()
         response = await client.post(
             "/v1/enhance/sync",
@@ -120,7 +120,7 @@ async def test_enhance_ollama_model_context_folds_into_user_message(client: Asyn
 @pytest.mark.asyncio
 async def test_enhance_cloud_model_keeps_system_prompt(client: AsyncClient) -> None:
     """Cloud fallback models have no Modelfile — they still need ours."""
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _fake_completion()
         response = await client.post(
             "/v1/enhance/sync",
@@ -141,7 +141,7 @@ async def test_enhance_stream_emits_keepalive_during_stall(client: AsyncClient, 
     Cloudflare kills proxied connections after 100s of silence."""
     import asyncio as aio
 
-    from prompt_enhance.routes import enhance as enhance_route
+    from koleslaw_api.routes import enhance as enhance_route
 
     monkeypatch.setattr(enhance_route, "KEEPALIVE_SECONDS", 0.05)
 
@@ -150,7 +150,7 @@ async def test_enhance_stream_emits_keepalive_during_stall(client: AsyncClient, 
         yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Enhanced"), finish_reason=None)])
         yield MagicMock(choices=[MagicMock(delta=MagicMock(content=""), finish_reason="stop")])
 
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = _slow_stream()
         response = await client.post(
             "/v1/enhance",

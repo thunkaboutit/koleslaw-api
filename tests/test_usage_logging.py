@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from prompt_enhance.services.usage import log_usage
+from koleslaw_api.services.usage import log_usage
 
 
 @pytest.fixture

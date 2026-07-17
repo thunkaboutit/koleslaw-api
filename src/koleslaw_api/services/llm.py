@@ -6,9 +6,9 @@ import httpx
 import litellm
 from litellm import acompletion
 
-from prompt_enhance.config import Settings
-from prompt_enhance.prompts.system import classify_enhancement_type, get_system_prompt
-from prompt_enhance.schemas.enhance import (
+from koleslaw_api.config import Settings
+from koleslaw_api.prompts.system import classify_enhancement_type, get_system_prompt
+from koleslaw_api.schemas.enhance import (
     EnhanceChunk,
     EnhanceRequest,
     EnhanceResponse,

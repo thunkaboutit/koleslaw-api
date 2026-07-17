@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from prompt_enhance.schemas.enhance import ModelInfo
+from koleslaw_api.schemas.enhance import ModelInfo
 
 router = APIRouter(prefix="/v1", tags=["models"])
 

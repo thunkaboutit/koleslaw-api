@@ -4,9 +4,9 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import Date, Integer, cast, func, select
 
-from prompt_enhance.db.models import ApiKey, UsageLog
-from prompt_enhance.schemas.usage import DailyUsage, UsageResponse, UsageSummary
-from prompt_enhance.services.session_auth import get_current_user_id
+from koleslaw_api.db.models import ApiKey, UsageLog
+from koleslaw_api.schemas.usage import DailyUsage, UsageResponse, UsageSummary
+from koleslaw_api.services.session_auth import get_current_user_id
 
 router = APIRouter(prefix="/v1/usage", tags=["usage"])
 

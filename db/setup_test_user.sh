@@ -11,7 +11,7 @@ set -euo pipefail
 
 echo "Seeding test user..."
 docker compose -f docker-compose.yml exec -T postgres \
-  psql -U postgres -d prompt_enhance < db/seed_test_user.sql
+  psql -U postgres -d koleslaw_api < db/seed_test_user.sql
 echo "Test user seeded."
 
 echo ""

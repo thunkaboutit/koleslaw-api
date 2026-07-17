@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from prompt_enhance.config import Settings, get_settings
-from prompt_enhance.db.models import ApiKey, UsageLog, User
-from prompt_enhance.schemas.account import DeleteAccountRequest, UpdateProfileRequest
-from prompt_enhance.schemas.auth import UserInfo
-from prompt_enhance.services.session_auth import SESSION_COOKIE, get_current_user_id
+from koleslaw_api.config import Settings, get_settings
+from koleslaw_api.db.models import ApiKey, UsageLog, User
+from koleslaw_api.schemas.account import DeleteAccountRequest, UpdateProfileRequest
+from koleslaw_api.schemas.auth import UserInfo
+from koleslaw_api.services.session_auth import SESSION_COOKIE, get_current_user_id
 
 logger = logging.getLogger(__name__)
 

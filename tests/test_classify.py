@@ -1,4 +1,4 @@
-from prompt_enhance.prompts.system import classify_enhancement_type
+from koleslaw_api.prompts.system import classify_enhancement_type
 
 
 class TestClassifyShortPrompts:
@@ -126,8 +126,8 @@ class TestExplicitTypePassthrough:
     """When the user specifies a type explicitly, auto-detection is not used."""
 
     def test_explicit_types_bypass_classification(self):
-        from prompt_enhance.schemas.enhance import EnhanceRequest
-        from prompt_enhance.services.llm import LLMService
+        from koleslaw_api.schemas.enhance import EnhanceRequest
+        from koleslaw_api.services.llm import LLMService
 
         short_prompt = "write a function"
         for explicit_type in ("expand", "refine", "structure"):
@@ -135,14 +135,14 @@ class TestExplicitTypePassthrough:
             assert LLMService.resolve_enhancement_type(req) == explicit_type
 
     def test_auto_triggers_classification(self):
-        from prompt_enhance.schemas.enhance import EnhanceRequest
-        from prompt_enhance.services.llm import LLMService
+        from koleslaw_api.schemas.enhance import EnhanceRequest
+        from koleslaw_api.services.llm import LLMService
 
         req = EnhanceRequest(prompt="write a function", enhancement_type="auto")
         assert LLMService.resolve_enhancement_type(req) == "expand"
 
     def test_default_is_auto(self):
-        from prompt_enhance.schemas.enhance import EnhanceRequest
+        from koleslaw_api.schemas.enhance import EnhanceRequest
 
         req = EnhanceRequest(prompt="write a function")
         assert req.enhancement_type == "auto"

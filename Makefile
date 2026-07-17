@@ -29,13 +29,13 @@ format:
 
 dev-local:
 	docker compose up -d postgres redis
-	uv run uvicorn prompt_enhance.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+	uv run uvicorn koleslaw_api.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
 db-init-local:
 	docker compose -f docker-compose.yml up -d postgres
 	@echo "Waiting for PostgresSQL..."
 	@until docker compose -f docker-compose.yml exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-	docker compose -f docker-compose.yml exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
+	docker compose -f docker-compose.yml exec -T postgres psql -U postgres -d koleslaw_api < db/init.sql
 	@echo "Database initialized."
 
 db-init-dev:
@@ -50,7 +50,7 @@ db-reset-local:
 	docker compose -f docker-compose.yml up -d postgres
 	@echo "Waiting for PostgresSQL..."
 	@until docker compose -f docker-compose.yml exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-	docker compose -f docker-compose.yml exec -T postgres psql -U postgres -d prompt_enhance < db/init.sql
+	docker compose -f docker-compose.yml exec -T postgres psql -U postgres -d koleslaw_api < db/init.sql
 	docker compose -f docker-compose.yml up -d redis
 	@echo "Database reset complete."
 

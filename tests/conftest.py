@@ -13,9 +13,9 @@ os.environ.setdefault("API_KEY_HASH_SECRET", "test-secret")
 os.environ.setdefault("SESSION_SECRET", "test-session-secret")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from prompt_enhance.config import Settings, get_settings  # noqa: E402
-from prompt_enhance.services.cache import PromptCache  # noqa: E402
-from prompt_enhance.services.llm import LLMService  # noqa: E402
+from koleslaw_api.config import Settings, get_settings  # noqa: E402
+from koleslaw_api.services.cache import PromptCache  # noqa: E402
+from koleslaw_api.services.llm import LLMService  # noqa: E402
 
 
 @pytest.fixture
@@ -69,10 +69,10 @@ async def client(
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
-    from prompt_enhance.routes import chat, enhance, health, models
-    from prompt_enhance.schemas.enhance import ErrorResponse
-    from prompt_enhance.services.auth import get_current_api_key
-    from prompt_enhance.services.llm import LLMServiceError
+    from koleslaw_api.routes import chat, enhance, health, models
+    from koleslaw_api.schemas.enhance import ErrorResponse
+    from koleslaw_api.services.auth import get_current_api_key
+    from koleslaw_api.services.llm import LLMServiceError
 
     @asynccontextmanager
     async def noop_lifespan(app: FastAPI) -> AsyncIterator[None]:

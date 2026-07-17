@@ -1,4 +1,4 @@
-# prompt-enhance
+# koleslaw-api
 
 AI prompt enhancement API service built with FastAPI, PostgreSQL, and Redis.
 
@@ -16,7 +16,7 @@ AI prompt enhancement API service built with FastAPI, PostgreSQL, and Redis.
 ## Project Layout
 
 ```
-src/prompt_enhance/     # Application package
+src/koleslaw_api/     # Application package
   config.py             # Pydantic settings (reads .env)
   main.py               # FastAPI app entrypoint
   routes/               # API route handlers

@@ -8,8 +8,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy import select
 
-from prompt_enhance.config import Settings, get_settings
-from prompt_enhance.db.models import ApiKey
+from koleslaw_api.config import Settings, get_settings
+from koleslaw_api.db.models import ApiKey
 
 logger = logging.getLogger(__name__)
 

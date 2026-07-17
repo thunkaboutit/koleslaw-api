@@ -6,10 +6,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 
-from prompt_enhance.config import Settings, get_settings
-from prompt_enhance.db.models import User
-from prompt_enhance.schemas.auth import UserInfo
-from prompt_enhance.services.session_auth import (
+from koleslaw_api.config import Settings, get_settings
+from koleslaw_api.db.models import User
+from koleslaw_api.schemas.auth import UserInfo
+from koleslaw_api.services.session_auth import (
     SESSION_COOKIE,
     SESSION_MAX_AGE,
     create_session_token,

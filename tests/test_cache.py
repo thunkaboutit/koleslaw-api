@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from prompt_enhance.services.cache import PromptCache
+from koleslaw_api.services.cache import PromptCache
 
 
 @pytest.fixture

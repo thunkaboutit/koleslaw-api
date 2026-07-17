@@ -10,9 +10,9 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from prompt_enhance.config import Settings
-from prompt_enhance.schemas.enhance import EnhanceRequest
-from prompt_enhance.services.llm import LLMService, LLMServiceError
+from koleslaw_api.config import Settings
+from koleslaw_api.schemas.enhance import EnhanceRequest
+from koleslaw_api.services.llm import LLMService, LLMServiceError
 
 FALLBACK = "anthropic/claude-haiku-4-5"
 LOCAL = "ollama_chat/prompt-enhance-14b-think"
@@ -56,7 +56,7 @@ def _conn_error(model: str = LOCAL) -> litellm.APIConnectionError:
 
 @pytest.mark.asyncio
 async def test_sync_falls_back_on_connection_error(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = [_conn_error(), _fake_completion()]
         response = await client.post(
             "/v1/enhance/sync",
@@ -74,7 +74,7 @@ async def test_sync_falls_back_on_connection_error(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_sync_falls_back_on_model_not_found(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = [
             litellm.NotFoundError(message="model not found", llm_provider="ollama", model=LOCAL),
             _fake_completion(),
@@ -89,7 +89,7 @@ async def test_sync_falls_back_on_model_not_found(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_sync_bad_request_does_not_fall_back(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = litellm.BadRequestError(message="bad request", llm_provider="ollama", model=LOCAL)
         response = await client.post(
             "/v1/enhance/sync",
@@ -101,7 +101,7 @@ async def test_sync_bad_request_does_not_fall_back(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_sync_cloud_primary_does_not_fall_back(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = _conn_error(model="anthropic/claude-sonnet-4-5")
         response = await client.post(
             "/v1/enhance/sync",
@@ -117,7 +117,7 @@ async def test_sync_cloud_primary_does_not_fall_back(client: AsyncClient) -> Non
 
 @pytest.mark.asyncio
 async def test_stream_falls_back_before_first_byte(client: AsyncClient) -> None:
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = [_conn_error(), _fake_stream()]
         response = await client.post(
             "/v1/enhance",
@@ -145,7 +145,7 @@ async def test_fallback_failure_surfaces_mapped_error() -> None:
         fallback_model=FALLBACK,
     )
     service = LLMService(settings)
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = [_conn_error(), _conn_error(model=FALLBACK)]
         with pytest.raises(LLMServiceError) as exc_info:
             await service.enhance(EnhanceRequest(prompt="Write a poem"))
@@ -165,7 +165,7 @@ async def test_no_fallback_configured_surfaces_error() -> None:
         fallback_model=None,
     )
     service = LLMService(settings)
-    with patch("prompt_enhance.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = _conn_error()
         with pytest.raises(LLMServiceError) as exc_info:
             await service.enhance(EnhanceRequest(prompt="Write a poem"))

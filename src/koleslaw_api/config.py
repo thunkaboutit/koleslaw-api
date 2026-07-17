@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/prompt_enhance"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/koleslaw_api"
     redis_url: str = "redis://localhost:6379"
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None

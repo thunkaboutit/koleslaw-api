@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, Request
 
-from prompt_enhance.config import Settings, get_settings
+from koleslaw_api.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 

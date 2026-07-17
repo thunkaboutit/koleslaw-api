@@ -3,10 +3,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
-from prompt_enhance.db.models import ApiKey
-from prompt_enhance.schemas.keys import CreateKeyRequest, CreateKeyResponse, KeyInfo, KeyListResponse
-from prompt_enhance.services.auth import generate_api_key, hash_api_key
-from prompt_enhance.services.session_auth import get_current_user_id
+from koleslaw_api.db.models import ApiKey
+from koleslaw_api.schemas.keys import CreateKeyRequest, CreateKeyResponse, KeyInfo, KeyListResponse
+from koleslaw_api.services.auth import generate_api_key, hash_api_key
+from koleslaw_api.services.session_auth import get_current_user_id
 
 router = APIRouter(prefix="/v1/keys", tags=["keys"])
 

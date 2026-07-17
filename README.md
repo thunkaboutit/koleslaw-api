@@ -1,4 +1,4 @@
-# prompt-enhance
+# koleslaw-api
 
 AI prompt enhancement API service. Takes rough or incomplete prompts and returns improved versions using LLM-powered
 enhancement strategies (expand, refine, structure).
@@ -38,7 +38,7 @@ Built with FastAPI, LiteLLM, Redis, and PostgreSQL.
 
 ```bash
 # Clone and enter the project
-cd prompt-enhance
+cd koleslaw-api
 
 # Install dependencies
 uv sync
@@ -171,7 +171,7 @@ curl -N http://localhost:8000/v1/chat/upload \
 ### Project Structure
 
 ```
-src/prompt_enhance/
+src/koleslaw_api/
 ├── main.py              # FastAPI app entry point and lifespan
 ├── config.py            # Pydantic Settings configuration
 ├── db/
