@@ -119,6 +119,8 @@ The enhancement type is automatically selected based on prompt length and struct
 | `ANON_KEY_HASHES`                | No       | portal playground key                    | JSON list of sha256 key hashes treated as anonymous |
 | `FREE_DAILY_LIMIT`               | No       | `50`                                     | Per-key daily cap on LLM endpoints, free plan (0 disables) |
 | `PRO_DAILY_LIMIT`                | No       | `500`                                    | Per-key daily cap on LLM endpoints, pro plan (0 disables) |
+| `STRIPE_SECRET_KEY`              | No       | —                                        | Stripe restricted API key (billing)       |
+| `STRIPE_WEBHOOK_SECRET`          | No       | —                                        | Stripe webhook signing secret; empty disables /v1/billing/webhook |
 | `CACHE_TTL_SECONDS`              | No       | `86400`                                  | Cache entry lifetime (seconds)            |
 | `CORS_ORIGINS`                   | No       | `["*"]`                                  | Allowed CORS origins                      |
 

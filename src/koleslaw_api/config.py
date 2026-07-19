@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # docs stripe-billing-plan.md in the workspace for the tier design
     free_daily_limit: int = 50
     pro_daily_limit: int = 500
+    # Billing (stripe-billing-plan.md). Empty/None = webhook disabled (503)
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
     cache_ttl_seconds: int = 86400
     github_client_id: str = ""
     github_client_secret: SecretStr | None = None
