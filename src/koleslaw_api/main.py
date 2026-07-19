@@ -10,7 +10,7 @@ from redis.asyncio import Redis
 
 from koleslaw_api.config import get_settings
 from koleslaw_api.db.engine import async_session_factory, create_engine
-from koleslaw_api.routes import account, auth, chat, enhance, health, keys, models, usage
+from koleslaw_api.routes import account, auth, billing, chat, enhance, health, keys, models, usage
 from koleslaw_api.schemas.enhance import ErrorResponse
 from koleslaw_api.services.cache import PromptCache
 from koleslaw_api.services.llm import LLMService, LLMServiceError
@@ -71,6 +71,7 @@ app.include_router(keys.router)
 app.include_router(usage.router)
 app.include_router(auth.router)
 app.include_router(account.router)
+app.include_router(billing.router)
 
 
 def _cors_headers(request: Request) -> dict[str, str]:

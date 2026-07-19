@@ -69,7 +69,7 @@ def app(
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
-    from koleslaw_api.routes import chat, enhance, health, models
+    from koleslaw_api.routes import billing, chat, enhance, health, models
     from koleslaw_api.schemas.enhance import ErrorResponse
     from koleslaw_api.services.auth import get_current_api_key
     from koleslaw_api.services.llm import LLMServiceError
@@ -91,6 +91,7 @@ def app(
     app.include_router(models.router)
     app.include_router(enhance.router)
     app.include_router(chat.router)
+    app.include_router(billing.router)
 
     app.dependency_overrides[get_current_api_key] = lambda: None
     app.dependency_overrides[get_settings] = lambda: settings
