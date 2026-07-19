@@ -91,8 +91,9 @@ async def test_counter_is_per_ip_and_per_day(client: AsyncClient, mock_redis: As
 
 
 @pytest.mark.asyncio
-async def test_non_anon_key_not_capped(client: AsyncClient, mock_redis: AsyncMock) -> None:
-    _arm_pipeline(mock_redis, count=999)
+async def test_non_anon_key_uses_keyed_counter_not_ip(client: AsyncClient, mock_redis: AsyncMock) -> None:
+    """Non-anonymous keys are governed by the per-key plan cap (see test_plan_caps), not the IP counter."""
+    pipe = _arm_pipeline(mock_redis, count=1)
     mock_redis.get = AsyncMock(return_value="cached result")
     response = await client.post(
         "/v1/enhance/sync",
@@ -100,7 +101,9 @@ async def test_non_anon_key_not_capped(client: AsyncClient, mock_redis: AsyncMoc
         headers={"Authorization": "Bearer pk_live_some-other-key", "CF-Connecting-IP": "203.0.113.7"},
     )
     assert response.status_code == 200
-    mock_redis.pipeline.assert_not_called()
+    (counter_key,) = pipe.incr.call_args.args
+    assert counter_key.startswith("key_daily:")
+    assert "203.0.113.7" not in counter_key
 
 
 @pytest.mark.asyncio

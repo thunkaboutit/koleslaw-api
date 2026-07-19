@@ -60,12 +60,12 @@ def mock_llm_service(settings: Settings) -> LLMService:
 
 
 @pytest.fixture
-async def client(
+def app(
     settings: Settings,
     mock_redis: AsyncMock,
     mock_db_session_factory: MagicMock,
     mock_llm_service: LLMService,
-) -> AsyncIterator[AsyncClient]:
+):
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
@@ -109,6 +109,11 @@ async def client(
         body = ErrorResponse(error=str(exc), code=exc.code, detail=exc.detail)
         return JSONResponse(status_code=status_code, content=body.model_dump())
 
+    return app
+
+
+@pytest.fixture
+async def client(app) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

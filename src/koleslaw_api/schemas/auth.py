@@ -10,3 +10,4 @@ class UserInfo(BaseModel):
     name: str
     oauth_provider: str
     created_at: datetime
+    plan: str = "free"
