@@ -9,7 +9,11 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL,
     oauth_provider VARCHAR(50) NOT NULL,
     oauth_id VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- 'anonymous' (seeded public user) | 'free' | 'pro'
+    plan VARCHAR(20) NOT NULL DEFAULT 'free',
+    stripe_customer_id VARCHAR(255),
+    stripe_subscription_id VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS api_keys (

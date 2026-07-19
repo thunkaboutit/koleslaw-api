@@ -19,6 +19,10 @@ class User(Base):
     oauth_provider: Mapped[str] = mapped_column(String(50))
     oauth_id: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # 'anonymous' (seeded public user) | 'free' | 'pro' — governs daily caps on LLM endpoints
+    plan: Mapped[str] = mapped_column(String(20), default="free", server_default="free")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

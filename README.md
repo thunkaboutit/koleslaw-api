@@ -117,6 +117,8 @@ The enhancement type is automatically selected based on prompt length and struct
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                                     | Per-key rate limit                        |
 | `ANON_DAILY_LIMIT`               | No       | `10`                                     | Per-IP daily cap on LLM endpoints for anonymous keys (0 disables) |
 | `ANON_KEY_HASHES`                | No       | portal playground key                    | JSON list of sha256 key hashes treated as anonymous |
+| `FREE_DAILY_LIMIT`               | No       | `50`                                     | Per-key daily cap on LLM endpoints, free plan (0 disables) |
+| `PRO_DAILY_LIMIT`                | No       | `500`                                    | Per-key daily cap on LLM endpoints, pro plan (0 disables) |
 | `CACHE_TTL_SECONDS`              | No       | `86400`                                  | Cache entry lifetime (seconds)            |
 | `CORS_ORIGINS`                   | No       | `["*"]`                                  | Allowed CORS origins                      |
 

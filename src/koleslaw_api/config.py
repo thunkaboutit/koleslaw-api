@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # baked into the web bundle (seeded by kowpen scripts/seed-db.sql).
     anon_daily_limit: int = 10
     anon_key_hashes: list[str] = ["cce87702a65c5cc49688ce812951ba585418eadfd7d2d93941ab37ac9b6b48a0"]
+    # Per-key daily caps on LLM endpoints by plan (0 disables); see
+    # docs stripe-billing-plan.md in the workspace for the tier design
+    free_daily_limit: int = 50
+    pro_daily_limit: int = 500
     cache_ttl_seconds: int = 86400
     github_client_id: str = ""
     github_client_secret: SecretStr | None = None

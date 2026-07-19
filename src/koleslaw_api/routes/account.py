@@ -47,6 +47,7 @@ async def update_profile(
         name=user.name,
         oauth_provider=user.oauth_provider,
         created_at=user.created_at,
+        plan=user.plan,
     )
 
 
