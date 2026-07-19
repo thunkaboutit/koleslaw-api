@@ -115,6 +115,8 @@ The enhancement type is automatically selected based on prompt length and struct
 | `DEFAULT_MODEL`                  | No       | `ollama_chat/prompt-enhance-14b-think`   | Default LLM model                         |
 | `ENVIRONMENT`                    | No       | `development`                            | `development`, `staging`, or `production` |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | No       | `60`                                     | Per-key rate limit                        |
+| `ANON_DAILY_LIMIT`               | No       | `10`                                     | Per-IP daily cap on LLM endpoints for anonymous keys (0 disables) |
+| `ANON_KEY_HASHES`                | No       | portal playground key                    | JSON list of sha256 key hashes treated as anonymous |
 | `CACHE_TTL_SECONDS`              | No       | `86400`                                  | Cache entry lifetime (seconds)            |
 | `CORS_ORIGINS`                   | No       | `["*"]`                                  | Allowed CORS origins                      |
 

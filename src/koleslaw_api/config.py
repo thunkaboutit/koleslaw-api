@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     session_secret: SecretStr = SecretStr("session_secret_change_me_development")
     cors_origins: list[str] = ["*"]
     rate_limit_requests_per_minute: int = 60
+    # Per-client-IP daily cap on LLM endpoints for anonymous keys (0 disables).
+    # Keys are matched by sha256 hash; the default is the portal playground key
+    # baked into the web bundle (seeded by kowpen scripts/seed-db.sql).
+    anon_daily_limit: int = 10
+    anon_key_hashes: list[str] = ["cce87702a65c5cc49688ce812951ba585418eadfd7d2d93941ab37ac9b6b48a0"]
     cache_ttl_seconds: int = 86400
     github_client_id: str = ""
     github_client_secret: SecretStr | None = None

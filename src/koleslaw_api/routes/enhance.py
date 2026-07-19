@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from koleslaw_api.schemas.enhance import EnhanceRequest, EnhanceResponse
-from koleslaw_api.services.auth import get_current_api_key
+from koleslaw_api.services.auth import get_current_api_key_anon_capped
 from koleslaw_api.services.cache import PromptCache
 from koleslaw_api.services.llm import LLMService
 from koleslaw_api.services.usage import log_usage
@@ -56,7 +56,7 @@ async def _with_keepalive(agen):
 async def enhance_stream(
     request: Request,
     body: EnhanceRequest,
-    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key_anon_capped),  # noqa: B008
 ) -> StreamingResponse:
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache
@@ -157,7 +157,7 @@ async def enhance_stream(
 async def enhance_sync(
     request: Request,
     body: EnhanceRequest,
-    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key_anon_capped),  # noqa: B008
 ) -> EnhanceResponse:
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache

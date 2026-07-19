@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from koleslaw_api.prompts.system import get_chat_system_prompt
 from koleslaw_api.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
-from koleslaw_api.services.auth import get_current_api_key
+from koleslaw_api.services.auth import get_current_api_key_anon_capped
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
 async def chat_stream(
     request: Request,
     body: ChatRequest,
-    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key_anon_capped),  # noqa: B008
 ) -> StreamingResponse:
     model = body.model or request.app.state.settings.default_model
     messages = _build_messages(body)
@@ -207,7 +207,7 @@ async def chat_stream_with_files(
     files: list[UploadFile] = File(default=[]),  # noqa: B008
     model: str | None = Form(default=None),
     context: str | None = Form(default=None),
-    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key_anon_capped),  # noqa: B008
 ) -> StreamingResponse:
     """Chat endpoint that accepts file attachments via multipart/form-data.
 
@@ -271,7 +271,7 @@ async def chat_stream_with_files(
 async def chat_sync(
     request: Request,
     body: ChatRequest,
-    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key_anon_capped),  # noqa: B008
 ) -> ChatResponse:
     model = body.model or request.app.state.settings.default_model
     messages = _build_messages(body)
