@@ -15,10 +15,19 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     default_model: str = "ollama_chat/prompt-enhance-14b-think"
     fallback_model: str | None = None
+    # Models a caller may select via the request `model` field. default_model
+    # is always allowed; this adds any extra *served* local tags (e.g. during a
+    # model-roll overlap). Cloud/fallback models are deliberately absent — they
+    # are server-internal fallback only, never caller-selectable, so a caller
+    # can't route requests to a paid provider on our keys (security review T1-A).
+    allowed_models: list[str] = []
     environment: Literal["development", "staging", "production"] = "development"
     api_key_hash_secret: SecretStr = SecretStr("api_key_hash_secret_change_me_development")
     session_secret: SecretStr = SecretStr("session_secret_change_me_development")
-    cors_origins: list[str] = ["*"]
+    # Explicit CORS allowlist — never a wildcard with credentials (T1-C). The
+    # portal is same-origin so needs no CORS; these cover any cross-origin
+    # browser client. Override via CORS_ORIGINS (JSON list) per environment.
+    cors_origins: list[str] = ["https://koleslaw.ai", "https://www.koleslaw.ai"]
     rate_limit_requests_per_minute: int = 60
     # Per-client-IP daily cap on LLM endpoints for anonymous keys (0 disables).
     # Keys are matched by sha256 hash; the default is the portal playground key

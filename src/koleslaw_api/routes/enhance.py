@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from koleslaw_api.schemas.enhance import EnhanceRequest, EnhanceResponse
 from koleslaw_api.services.auth import get_llm_api_key
 from koleslaw_api.services.cache import PromptCache
-from koleslaw_api.services.llm import LLMService
+from koleslaw_api.services.llm import LLMService, resolve_allowed_model
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ async def enhance_stream(
 ) -> StreamingResponse:
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache
-    model = body.model or request.app.state.settings.default_model
+    model = resolve_allowed_model(body.model, request.app.state.settings)
     resolved_type = LLMService.resolve_enhancement_type(body)
 
     cached = await cache.get(body.prompt, resolved_type, model)
@@ -161,7 +161,7 @@ async def enhance_sync(
 ) -> EnhanceResponse:
     llm: LLMService = request.app.state.llm_service
     cache: PromptCache = request.app.state.cache
-    model = body.model or request.app.state.settings.default_model
+    model = resolve_allowed_model(body.model, request.app.state.settings)
     resolved_type = LLMService.resolve_enhancement_type(body)
 
     cached = await cache.get(body.prompt, resolved_type, model)

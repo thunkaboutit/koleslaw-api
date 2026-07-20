@@ -11,7 +11,8 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=100)
     model: str | None = None
-    context: str | None = None
+    # Bounded like message content — appended into the model input (T2-E).
+    context: str | None = Field(default=None, max_length=50000)
 
 
 class ChatChunk(BaseModel):

@@ -75,27 +75,44 @@ async def _upsert_oauth_user(
     oauth_id: str,
     email: str,
     name: str,
+    email_verified: bool,
 ) -> User:
     """Find or create a user for an OAuth sign-in.
 
     Lookup order:
       1. Exact match on oauth_provider + oauth_id  (returning user, same provider)
-      2. Match on email                             (same person, different provider)
+      2. Match on email — ONLY if the provider says the email is verified
+         (same person, different provider)
       3. Create a new user                          (first time)
+
+    Security (T2-D): the cross-provider email link (step 2) is gated on
+    ``email_verified``. An unverified email — e.g. a GitHub primary address the
+    signer never confirmed — must never attach a sign-in to someone else's
+    account. If an unverified email already belongs to an account, we refuse
+    (409) rather than 500 on the unique constraint or silently linking.
     """
     async with db_session_factory() as session:
-        # 1. Exact provider match
+        # 1. Exact provider identity — always trusted for its own account.
         result = await session.execute(
             select(User).where(User.oauth_provider == oauth_provider, User.oauth_id == oauth_id)
         )
         user = result.scalar_one_or_none()
 
-        # 2. Cross-provider match by email
-        if user is None and email:
+        # 2. Cross-provider match by email — verified emails only.
+        if user is None and email and email_verified:
             result = await session.execute(select(User).where(User.email == email))
             user = result.scalar_one_or_none()
 
         if user is None:
+            # An unverified email that already belongs to an account can neither
+            # create a duplicate (email is unique) nor silently link — refuse.
+            if email and not email_verified:
+                clash = await session.execute(select(User).where(User.email == email))
+                if clash.scalar_one_or_none() is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="An account with this email already exists. Sign in with your original provider.",
+                    )
             # 3. Brand-new user
             user = User(
                 oauth_provider=oauth_provider,
@@ -203,13 +220,17 @@ async def github_callback(
         user_resp = await client.get(GITHUB_USER_URL, headers=headers)
         gh_user = user_resp.json()
 
-        # Fetch primary email if not public
+        # The public profile email is one GitHub has verified; otherwise fall
+        # back to the primary address and carry its verification flag (T2-D).
         email = gh_user.get("email")
+        email_verified = bool(email)
         if not email:
             emails_resp = await client.get(GITHUB_EMAILS_URL, headers=headers)
             emails = emails_resp.json()
-            primary = next((e for e in emails if e.get("primary")), None)
-            email = primary["email"] if primary else emails[0]["email"]
+            chosen = next((e for e in emails if e.get("primary")), None) or (emails[0] if emails else None)
+            if chosen:
+                email = chosen["email"]
+                email_verified = bool(chosen.get("verified", False))
 
     github_id = str(gh_user["id"])
     name = gh_user.get("name") or gh_user.get("login", "")
@@ -220,6 +241,7 @@ async def github_callback(
         oauth_id=github_id,
         email=email,
         name=name,
+        email_verified=email_verified,
     )
 
     # Set session cookie and redirect to frontend
@@ -307,6 +329,8 @@ async def google_callback(
     google_id = str(g_user["id"])
     name = g_user.get("name", "")
     email = g_user.get("email", "")
+    # Google's userinfo reports verification via verified_email (T2-D).
+    email_verified = bool(g_user.get("verified_email") or g_user.get("email_verified"))
 
     user = await _upsert_oauth_user(
         request.app.state.db_session_factory,
@@ -314,6 +338,7 @@ async def google_callback(
         oauth_id=google_id,
         email=email,
         name=name,
+        email_verified=email_verified,
     )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
@@ -397,6 +422,8 @@ async def facebook_callback(
     facebook_id = str(fb_user["id"])
     name = fb_user.get("name", "")
     email = fb_user.get("email", "")
+    # Facebook only returns an email once the user has confirmed it (T2-D).
+    email_verified = bool(email)
 
     user = await _upsert_oauth_user(
         request.app.state.db_session_factory,
@@ -404,6 +431,7 @@ async def facebook_callback(
         oauth_id=facebook_id,
         email=email,
         name=name,
+        email_verified=email_verified,
     )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
@@ -491,6 +519,8 @@ async def instagram_callback(
     instagram_id = str(ig_user.get("id", user_id_from_token))
     username = ig_user.get("username", "")
     name = username
+    # Instagram gives no email — the synthetic address is not a real, verifiable
+    # inbox, so it must never link to a real account by email (T2-D).
     email = f"{username}@instagram.oauth"
 
     user = await _upsert_oauth_user(
@@ -499,6 +529,7 @@ async def instagram_callback(
         oauth_id=instagram_id,
         email=email,
         name=name,
+        email_verified=False,
     )
 
     response = _session_response(user.id, settings, redirect_to=f"{settings.frontend_url}/dashboard")
