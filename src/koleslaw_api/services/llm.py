@@ -262,4 +262,8 @@ class LLMService:
                 ]
             )
 
-        return models
+        # Only advertise what a caller can actually select — same allowlist
+        # resolve_allowed_model enforces — so /v1/models never lists a model the
+        # LLM endpoints would 400 (cloud/fallback + unserved tags drop out; T1-A).
+        allowed = {self._settings.default_model, *self._settings.allowed_models}
+        return [m for m in models if m.id in allowed]

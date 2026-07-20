@@ -15,7 +15,7 @@ then focused unit tests for the resolver's edge cases.
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -23,7 +23,7 @@ from httpx import AsyncClient
 from pydantic import SecretStr
 
 from koleslaw_api.config import Settings
-from koleslaw_api.services.llm import resolve_allowed_model
+from koleslaw_api.services.llm import LLMService, resolve_allowed_model
 
 PUBLIC_KEY = "pk_live_fNuYW07Bf16zLFLbghxSPERYV4QS1SWF4-OuLJ5JcCE"
 
@@ -134,6 +134,26 @@ async def test_enhance_sync_allows_omitted_model(client: AsyncClient, mock_redis
     assert response.json()["cached"] is True
 
 
+@pytest.mark.asyncio
+async def test_chat_sync_allows_and_forwards_resolved_model(client: AsyncClient, settings: Settings) -> None:
+    """Chat has no service/cache layer, so this proves the route forwards the
+    resolved (default) model to acompletion and returns 200."""
+    resp = MagicMock()
+    resp.choices = [MagicMock()]
+    resp.choices[0].message.content = "hello there"
+    resp.usage.prompt_tokens = 5
+    resp.usage.completion_tokens = 7
+    with patch("koleslaw_api.routes.chat.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = resp
+        response = await client.post(
+            "/v1/chat/sync",
+            json={"messages": [{"role": "user", "content": "hi"}]},
+        )
+    assert response.status_code == 200
+    assert response.json()["model_used"] == settings.default_model
+    assert mock_llm.call_args.kwargs["model"] == settings.default_model
+
+
 # ── Integration: the real anon path (cap admits, then model is rejected) ──
 
 
@@ -154,6 +174,52 @@ async def test_anon_public_key_caller_still_rejected(client: AsyncClient, mock_r
     )
     assert response.status_code == 400
     assert "not available" in response.json()["detail"].lower()
+
+
+# ── /v1/models must advertise only what a caller can actually select ─────
+
+
+def _mock_ollama_tags(*names: str):
+    """Patch the Ollama /api/tags call in get_available_models to return `names`."""
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value={"models": [{"name": n} for n in names]})
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=resp)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    return patch("koleslaw_api.services.llm.httpx.AsyncClient", return_value=client)
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_excludes_cloud_and_unserved() -> None:
+    """/v1/models must not advertise models the allowlist would 400 — otherwise
+    the discovery endpoint contradicts the enhance endpoint (T1-A tail)."""
+    settings = Settings(
+        default_model="ollama_chat/prompt-enhance-14b-think",
+        anthropic_api_key=SecretStr("sk-test"),  # would add cloud entries
+        openai_api_key=SecretStr("sk-test"),
+    )
+    service = LLMService(settings)
+    with _mock_ollama_tags("prompt-enhance-14b-think", "some-other-served-tag"):
+        models = await service.get_available_models()
+    ids = [m.id for m in models]
+    # Only the allowlisted default survives — no cloud, no unserved local tag.
+    assert ids == ["ollama_chat/prompt-enhance-14b-think"]
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_includes_explicitly_allowed() -> None:
+    """A tag added to allowed_models is advertised alongside the default."""
+    settings = Settings(
+        default_model="ollama_chat/base",
+        allowed_models=["ollama_chat/koleslaw-nemotron"],
+    )
+    service = LLMService(settings)
+    with _mock_ollama_tags("base", "koleslaw-nemotron", "not-allowed"):
+        models = await service.get_available_models()
+    ids = {m.id for m in models}
+    assert ids == {"ollama_chat/base", "ollama_chat/koleslaw-nemotron"}
 
 
 # ── Unit: the resolver's edge cases ──────────────────────────────────────
