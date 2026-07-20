@@ -3,6 +3,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
+from koleslaw_api.config import Settings
+from koleslaw_api.schemas.enhance import EnhanceRequest
+from koleslaw_api.services.llm import LLMService
+
 
 def _fake_completion():
     resp = MagicMock()
@@ -117,21 +121,17 @@ async def test_enhance_ollama_model_context_folds_into_user_message(client: Asyn
     assert "for a wedding toast" in messages[0]["content"]
 
 
-@pytest.mark.asyncio
-async def test_enhance_cloud_model_keeps_system_prompt(client: AsyncClient) -> None:
-    """Cloud fallback models have no Modelfile — they still need ours."""
-    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = _fake_completion()
-        response = await client.post(
-            "/v1/enhance/sync",
-            json={
-                "prompt": "Write a poem",
-                "enhancement_type": "refine",
-                "model": "anthropic/claude-haiku-4-5",
-            },
-        )
-    assert response.status_code == 200
-    messages = mock_llm.call_args.kwargs["messages"]
+def test_build_messages_cloud_model_keeps_system_prompt(settings: Settings) -> None:
+    """Cloud fallback models have no Modelfile — they still need ours. Post-T1-A
+    a caller can't select a cloud model, so this exercises the _build_messages
+    cloud branch directly; the fallback path's system prompt is covered live in
+    test_fallback.py."""
+    service = LLMService(settings)
+    messages = service._build_messages(
+        EnhanceRequest(prompt="Write a poem", enhancement_type="refine"),
+        "refine",
+        "anthropic/claude-haiku-4-5",
+    )
     assert [m["role"] for m in messages] == ["system", "user"]
 
 

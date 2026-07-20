@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 
 import httpx
 import litellm
+from fastapi import HTTPException
 from litellm import acompletion
 
 from koleslaw_api.config import Settings
@@ -15,6 +16,35 @@ from koleslaw_api.schemas.enhance import (
     ModelInfo,
     Usage,
 )
+
+# How much of a rejected model string to echo back in the 400 — enough to
+# debug a legitimate typo, capped so a hostile over-long value isn't reflected.
+_MAX_MODEL_ECHO = 80
+
+
+def resolve_allowed_model(requested: str | None, settings: Settings) -> str:
+    """Resolve a caller-supplied model to a permitted model id, or raise 400.
+
+    Callers may select only ``settings.default_model`` or a tag explicitly
+    listed in ``settings.allowed_models``. Cloud models are server-internal
+    fallback only — never caller-selectable — so a caller cannot route requests
+    to a paid provider on our account, whether directly (``openai/gpt-4o``) or
+    by naming a bogus ``ollama_chat/*`` tag that would 404 into the cloud
+    fallback. Matching is exact (after trimming); a prefix rule would miss that
+    second path. See docs/security-review-2026-07-19.md (T1-A).
+    """
+    if requested is None or not requested.strip():
+        return settings.default_model
+    model = requested.strip()
+    allowed = {settings.default_model, *settings.allowed_models}
+    if model not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Model '{model[:_MAX_MODEL_ECHO]}' is not available. See GET /v1/models for the models you can use."
+            ),
+        )
+    return model
 
 
 class LLMServiceError(Exception):
@@ -48,7 +78,9 @@ class LLMService:
         os.environ["OLLAMA_API_BASE"] = settings.ollama_base_url
 
     def _resolve_model(self, request: EnhanceRequest) -> str:
-        return request.model or self._settings.default_model
+        # Defense in depth: routes validate at the boundary, but the service
+        # never calls acompletion with an unvalidated model either (T1-A).
+        return resolve_allowed_model(request.model, self._settings)
 
     @staticmethod
     def resolve_enhancement_type(request: EnhanceRequest) -> str:

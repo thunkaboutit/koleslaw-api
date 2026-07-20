@@ -100,18 +100,26 @@ async def test_sync_bad_request_does_not_fall_back(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sync_cloud_primary_does_not_fall_back(client: AsyncClient) -> None:
+async def test_cloud_primary_does_not_fall_back() -> None:
+    """A cloud *primary* does not fall back — fallback is only for ollama_chat/*
+    primaries. Driven at the service level: post-T1-A a caller can't select a
+    cloud model, so this only arises when default_model itself is a cloud model.
+    (connection_error maps to HTTP 502.)"""
+    settings = Settings(
+        database_url="postgresql+asyncpg://localhost:5432/test",
+        redis_url="redis://localhost:6379/0",
+        api_key_hash_secret=SecretStr("test-secret"),
+        session_secret=SecretStr("test-session-secret"),
+        environment="development",
+        default_model="anthropic/claude-sonnet-4-5",
+        fallback_model=FALLBACK,
+    )
+    service = LLMService(settings)
     with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
         mock_llm.side_effect = _conn_error(model="anthropic/claude-sonnet-4-5")
-        response = await client.post(
-            "/v1/enhance/sync",
-            json={
-                "prompt": "Write a poem",
-                "enhancement_type": "refine",
-                "model": "anthropic/claude-sonnet-4-5",
-            },
-        )
-    assert response.status_code == 502
+        with pytest.raises(LLMServiceError) as exc_info:
+            await service.enhance(EnhanceRequest(prompt="Write a poem", enhancement_type="refine"))
+    assert exc_info.value.code == "connection_error"
     assert mock_llm.call_count == 1
 
 

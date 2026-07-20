@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from koleslaw_api.prompts.system import get_chat_system_prompt
 from koleslaw_api.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
 from koleslaw_api.services.auth import get_llm_api_key
+from koleslaw_api.services.llm import resolve_allowed_model
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -166,7 +167,7 @@ async def chat_stream(
     body: ChatRequest,
     api_key_id: uuid.UUID | None = Depends(get_llm_api_key),  # noqa: B008
 ) -> StreamingResponse:
-    model = body.model or request.app.state.settings.default_model
+    model = resolve_allowed_model(body.model, request.app.state.settings)
     messages = _build_messages(body)
     collected: list[str] = []
     start = time.monotonic()
@@ -222,6 +223,9 @@ async def chat_stream_with_files(
     except (json.JSONDecodeError, ValidationError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=f"Invalid messages JSON: {exc}") from exc
 
+    # Validate the caller-supplied model before doing any file work (T1-A).
+    resolved_model = resolve_allowed_model(model, request.app.state.settings)
+
     if len(files) > MAX_FILE_COUNT:
         raise HTTPException(status_code=422, detail=f"Too many files. Maximum is {MAX_FILE_COUNT}.")
 
@@ -233,7 +237,6 @@ async def chat_stream_with_files(
         file_blocks.append(block)
 
     body = ChatRequest(messages=parsed_messages, model=model, context=context)
-    resolved_model = body.model or request.app.state.settings.default_model
     llm_messages = _build_messages_with_files(body, file_blocks)
     collected: list[str] = []
     start = time.monotonic()
@@ -273,7 +276,7 @@ async def chat_sync(
     body: ChatRequest,
     api_key_id: uuid.UUID | None = Depends(get_llm_api_key),  # noqa: B008
 ) -> ChatResponse:
-    model = body.model or request.app.state.settings.default_model
+    model = resolve_allowed_model(body.model, request.app.state.settings)
     messages = _build_messages(body)
 
     start = time.monotonic()
