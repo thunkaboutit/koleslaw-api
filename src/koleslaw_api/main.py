@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
-from koleslaw_api.config import get_settings
+from koleslaw_api.config import Settings, get_settings
 from koleslaw_api.db.engine import async_session_factory, create_engine
 from koleslaw_api.routes import account, auth, billing, chat, enhance, health, keys, models, usage
 from koleslaw_api.schemas.enhance import ErrorResponse
@@ -55,13 +55,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Prompt Enhance API", version="0.1.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r".*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+def configure_cors(app: FastAPI, settings: Settings) -> None:
+    """Apply the explicit-allowlist CORS policy (T1-C).
+
+    An allowlist (never a wildcard) paired with credentials, so only known
+    origins can make credentialed cross-origin requests. The portal is
+    same-origin and needs no CORS; browser extensions declare host permissions
+    and bypass CORS, so this list is the small set of cross-origin browser
+    clients we actually trust.
+    """
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+configure_cors(app, get_settings())
 
 app.include_router(health.router)
 app.include_router(models.router)
@@ -75,8 +88,10 @@ app.include_router(billing.router)
 
 
 def _cors_headers(request: Request) -> dict[str, str]:
+    # Error responses bypass the CORS middleware, so mirror its allowlist here —
+    # only reflect an origin we actually trust (T1-C).
     origin = request.headers.get("origin")
-    if origin:
+    if origin and origin in request.app.state.settings.cors_origins:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
