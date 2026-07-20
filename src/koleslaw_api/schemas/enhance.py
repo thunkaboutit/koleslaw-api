@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 class EnhanceRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=50000)
-    context: str | None = None
+    # Bounded like prompt — it's appended into the model input, so leaving it
+    # open is a cost/token-amplification lever past the prompt cap (T2-E).
+    context: str | None = Field(default=None, max_length=50000)
     model: str | None = None
     enhancement_type: Literal["auto", "expand", "refine", "structure"] = "auto"
     stream: bool = True
