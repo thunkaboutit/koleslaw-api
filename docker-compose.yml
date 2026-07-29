@@ -1,6 +1,6 @@
 services:
   portal:
-    build: ../koleslaw-developer-portal
+    build: ../koleslaw-ui
     ports:
       - "5173:80"
     environment:
