@@ -106,7 +106,7 @@ ENHANCEMENT_PROMPTS: dict[str, str] = {
 
 
 CHAT_SYSTEM_PROMPT = (
-    "You are Koleslaw, a helpful AI assistant embedded in the Koleslaw Developer Portal. "
+    "You are Koleslaw, a helpful AI assistant embedded in the Koleslaw web UI. "
     "You specialize in helping developers write better prompts for LLMs, but you can also "
     "answer general development questions.\n"
     "\n"
