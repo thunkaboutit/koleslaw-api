@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     # are server-internal fallback only, never caller-selectable, so a caller
     # can't route requests to a paid provider on our keys (security review T1-A).
     allowed_models: list[str] = []
+    # Queue shaping: explicit ceilings on LLM calls so a request queued behind
+    # a busy GPU spills to the fallback model instead of hanging (LiteLLM's
+    # default request timeout is 6000s). Both are read-based, not total-duration:
+    # the stream value caps time-to-first-token (an active stream is never cut
+    # mid-generation), the sync value caps queue wait + the whole generation —
+    # keep it under the 100s proxy idle wall the sync endpoint lives behind.
+    llm_stream_timeout_seconds: float = 30.0
+    llm_sync_timeout_seconds: float = 90.0
     environment: Literal["development", "staging", "production"] = "development"
     api_key_hash_secret: SecretStr = SecretStr("api_key_hash_secret_change_me_development")
     session_secret: SecretStr = SecretStr("session_secret_change_me_development")

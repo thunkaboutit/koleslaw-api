@@ -158,10 +158,17 @@ class LLMService:
     async def enhance(self, request: EnhanceRequest, resolved_type: str | None = None) -> EnhanceResponse:
         model = self._resolve_model(request)
         resolved = resolved_type or self.resolve_enhancement_type(request)
+        # The sync path gets no bytes until the whole generation is done, so
+        # this timeout covers queue wait + generation. A local-tier timeout
+        # raises before any byte reaches the caller — the availability
+        # fallback below turns it into a fast cloud answer, and Ollama drops
+        # the abandoned request from its queue on disconnect.
+        timeout = self._settings.llm_sync_timeout_seconds
         try:
             response = await acompletion(
                 model=model,
                 messages=self._build_messages(request, resolved, model),
+                timeout=timeout,
                 num_retries=3,
             )
         except Exception as exc:
@@ -170,6 +177,7 @@ class LLMService:
                 response = await acompletion(
                     model=model,
                     messages=self._build_messages(request, resolved, model),
+                    timeout=timeout,
                     num_retries=3,
                 )
             except Exception as fallback_exc:
@@ -190,11 +198,21 @@ class LLMService:
     ) -> AsyncGenerator[EnhanceChunk, None]:
         model = self._resolve_model(request)
         resolved = resolved_type or self.resolve_enhancement_type(request)
+        # Streaming timeouts are between-read, not total-duration: this caps
+        # how long a request may sit in Ollama's queue waiting for its first
+        # token (the server sends nothing until a slot frees), while an
+        # active generation streams tokens far more often than the ceiling
+        # and is never cut off. Ollama serves one request at a time, so under
+        # a burst this is what turns "hang for minutes" into "cloud fallback
+        # in seconds" — see also OLLAMA_MAX_QUEUE on the instance, which
+        # 503s excess queue depth instantly for the same reason.
+        timeout = self._settings.llm_stream_timeout_seconds
         try:
             response = await acompletion(
                 model=model,
                 messages=self._build_messages(request, resolved, model),
                 stream=True,
+                timeout=timeout,
                 num_retries=3,
             )
         except Exception as exc:
@@ -207,6 +225,7 @@ class LLMService:
                     model=model,
                     messages=self._build_messages(request, resolved, model),
                     stream=True,
+                    timeout=timeout,
                     num_retries=3,
                 )
             except Exception as fallback_exc:
