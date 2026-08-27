@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     instagram_client_id: str = ""
     instagram_client_secret: SecretStr | None = None
     frontend_url: str = "http://localhost:5173"
+    # Host header allowlist for the MCP endpoint's DNS-rebinding protection.
+    # MCP clients are not browsers and send no Origin, so an Origin allowlist
+    # stays empty on purpose: absent passes, anything present is rejected.
+    # `host:*` matches any port.
+    mcp_allowed_hosts: list[str] = ["api.koleslaw.ai", "localhost:*", "127.0.0.1:*"]
 
 
 @lru_cache
