@@ -290,3 +290,21 @@ async def _check_plan_daily_cap(request: Request, key_hash: str, redis: Redis, s
         )
 
     request.state.daily_remaining = remaining
+
+
+async def authenticate_llm_caller(request: Request) -> uuid.UUID | None:
+    """Run the LLM-endpoint auth chain outside FastAPI's dependency injection.
+
+    The MCP endpoint is a mounted ASGI app, so nothing there goes through
+    Depends(). Calling the same two functions the /v1/enhance routes depend on
+    keeps that door on identical key validation, per-key rate limiting, and
+    daily caps — a parallel implementation is how a second front door ends up
+    with weaker limits than the first.
+
+    Raises:
+        HTTPException: Exactly as the dependency chain does (401 / 429).
+    """
+    settings: Settings = request.app.state.settings
+    credentials = await security(request)
+    api_key_id = await get_current_api_key(request, credentials, settings)
+    return await get_llm_api_key(request, credentials, settings, api_key_id)

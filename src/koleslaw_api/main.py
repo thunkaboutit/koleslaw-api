@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 
 from koleslaw_api.config import Settings, get_settings
 from koleslaw_api.db.engine import async_session_factory, create_engine
+from koleslaw_api.mcp_server import mount_mcp_server
 from koleslaw_api.routes import account, auth, billing, chat, enhance, health, keys, models, usage
 from koleslaw_api.schemas.enhance import ErrorResponse
 from koleslaw_api.services.cache import PromptCache
@@ -84,7 +85,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.llm_service = LLMService(settings)
     app.state.cache = PromptCache(redis)
 
-    yield
+    # The MCP session manager's task group has to be owned by this lifespan.
+    # Without it the mounted endpoint 500s on its first call with "task group
+    # is not initialized".
+    async with app.state.mcp_server.session_manager.run():
+        yield
 
     await redis.aclose()
     await engine.dispose()
@@ -122,6 +127,11 @@ app.include_router(usage.router)
 app.include_router(auth.router)
 app.include_router(account.router)
 app.include_router(billing.router)
+
+# Settings are read at mount time (the Host allowlist); everything else the MCP
+# tool needs is read off app.state per call, after the lifespan populates it.
+app.state.settings = get_settings()
+app.state.mcp_server = mount_mcp_server(app)
 
 
 def _cors_headers(request: Request) -> dict[str, str]:
