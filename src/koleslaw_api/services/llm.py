@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -47,6 +48,77 @@ def resolve_allowed_model(requested: str | None, settings: Settings) -> str:
     return model
 
 
+# ── Binary attachment routing ────────────────────────────────────────
+#
+# /v1/chat/upload turns an attached binary file into an image_url content
+# block, which only a vision-capable model can accept. Our self-hosted default
+# is a text-only fine-tune, so it answers such a request with a 400 ("model
+# does not support multimodal requests"). Those requests therefore have to be
+# routed to the vision-capable cloud tier or refused up front.
+
+# The formats the vision-capable cloud tier actually accepts. Anything else
+# binary (PDF, audio, video, office documents) used to be base64-encoded into
+# an image_url block anyway and failed deep inside the provider; refusing it
+# here turns a confusing backend error into a clear one, and stops a large
+# unusable file from being encoded and shipped at all.
+SUPPORTED_IMAGE_MIMES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+    }
+)
+
+# Plan that may not spend metered provider budget on attachments. The seeded
+# public playground key is IP-capped, not account-capped, so routing it to the
+# cloud tier would put unauthenticated traffic straight onto paid inference,
+# five files of up to 10 MB a time.
+ATTACHMENT_DENIED_PLAN = "anonymous"
+
+
+def model_supports_vision(model: str) -> bool:
+    """Whether LiteLLM reports image-input support for this model id.
+
+    An id LiteLLM does not know answers False. Our own Ollama tags are not in
+    its capability map, and False is the safe direction: guessing "yes" sends
+    images to a model that rejects them, which is the bug this replaces.
+    """
+    try:
+        return bool(litellm.supports_vision(model=model))
+    except Exception:
+        return False
+
+
+def resolve_attachment_model(model: str, settings: Settings, plan: str | None) -> str:
+    """Return a model able to accept image input, or raise 403/422.
+
+    The returned model is chosen by the server, never by the caller, so this is
+    the same server-internal lane the T1-A allowlist in ``resolve_allowed_model``
+    keeps callers out of. A caller still cannot name a cloud model; it can only
+    attach an image and have the server decide where that has to run.
+    """
+    if model_supports_vision(model):
+        return model
+
+    if plan == ATTACHMENT_DENIED_PLAN:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Image attachments need an account. Sign in at https://koleslaw.ai "
+                "to create a free API key, or attach a text file instead."
+            ),
+        )
+
+    fallback = settings.fallback_model
+    if not fallback or not model_supports_vision(fallback):
+        raise HTTPException(
+            status_code=422,
+            detail=("Image attachments are not available right now. Attach a text file instead."),
+        )
+    return fallback
+
+
 class LLMServiceError(Exception):
     def __init__(self, message: str, code: str, detail: str | None = None):
         super().__init__(message)
@@ -66,6 +138,58 @@ _AVAILABILITY_ERRORS = (
     litellm.InternalServerError,
     litellm.NotFoundError,
 )
+
+# LiteLLM reports some provider HTTP errors as APIConnectionError no matter what
+# status the provider actually sent: an Ollama 400 arrives as one, wrapping the
+# provider's JSON body. APIConnectionError is also the exact signal the
+# availability fallback exists for (a reclaimed GPU), so without this a plain
+# bad request would be retried on the metered cloud tier and fail there too, at
+# cost. Parse the wrapped status and treat the codes that mean "this request is
+# wrong" as non-retryable.
+_UPSTREAM_STATUS_RE = re.compile(
+    r"""(?:status_?code|code)\\?["']?\s*[:=]\s*\\?["']?(\d{3})|error\s+code:\s*(\d{3})""",
+    re.IGNORECASE,
+)
+
+# 404 is deliberately absent: an instance that lost its model registration
+# answers 404, and that IS an availability problem (see _AVAILABILITY_ERRORS).
+# 408, 429 and every 5xx are absent for the same reason — another tier may well
+# serve what this one could not.
+_NON_RETRYABLE_UPSTREAM_STATUSES = frozenset({400, 401, 403, 413, 422})
+
+_GENERIC_LLM_ERROR = "Something went wrong generating a response. Please try again."
+
+
+def wrapped_upstream_status(exc: Exception) -> int | None:
+    """The provider-reported HTTP status embedded in a LiteLLM error message."""
+    match = _UPSTREAM_STATUS_RE.search(str(exc))
+    if match is None:
+        return None
+    raw = match.group(1) or match.group(2)
+    return int(raw) if raw else None
+
+
+def user_facing_llm_error(exc: Exception) -> str:
+    """A short, safe message for a client.
+
+    Provider exception text carries backend identity, model tags and raw
+    upstream JSON. It used to reach callers verbatim — streamed into the chat
+    body, and put in the error field of every LLMServiceError response. Full
+    detail still goes to the log; only this string leaves the process.
+    """
+    if isinstance(exc, litellm.ContextWindowExceededError):
+        return "That request is too large for the model. Try shortening it or removing an attachment."
+    if isinstance(exc, litellm.RateLimitError):
+        return "The service is busy right now. Please try again in a moment."
+    if isinstance(exc, litellm.AuthenticationError):
+        return "The service is temporarily misconfigured. Please try again later."
+    if isinstance(exc, litellm.BadRequestError):
+        return "That request could not be processed. Try changing the prompt or removing an attachment."
+    if isinstance(exc, _AVAILABILITY_ERRORS):
+        # Includes a wrapped provider 4xx, which reads as a transport error
+        # here; the generic retry wording is still accurate enough for a client.
+        return "The model is temporarily unavailable. Please try again in a moment."
+    return _GENERIC_LLM_ERROR
 
 
 class LLMService:
@@ -133,6 +257,10 @@ class LLMService:
             or fallback == model
             or not model.startswith("ollama_chat/")
             or not isinstance(exc, _AVAILABILITY_ERRORS)
+            # A provider 4xx that LiteLLM wrapped as a transport error is a bad
+            # request, not an outage; paying the cloud tier to fail identically
+            # helps nobody.
+            or wrapped_upstream_status(exc) in _NON_RETRYABLE_UPSTREAM_STATUSES
         ):
             raise self._map_exception(exc) from exc
         logging.getLogger(__name__).warning(
@@ -141,19 +269,31 @@ class LLMService:
         return fallback
 
     def _map_exception(self, exc: Exception) -> LLMServiceError:
+        # The message is the sanitised one: every caller here has already sent
+        # the raw exception to the log via _log_llm_error, and this string is
+        # what the HTTP error handler and the MCP tool hand back to a caller.
+        message = user_facing_llm_error(exc)
         if isinstance(exc, litellm.AuthenticationError):
-            return LLMServiceError(str(exc), "authentication_error")
+            return LLMServiceError(message, "authentication_error")
         if isinstance(exc, litellm.RateLimitError):
-            return LLMServiceError(str(exc), "rate_limit_error")
+            return LLMServiceError(message, "rate_limit_error")
         if isinstance(exc, litellm.BadRequestError):
-            return LLMServiceError(str(exc), "bad_request")
+            return LLMServiceError(message, "bad_request")
         if isinstance(exc, litellm.NotFoundError):
-            return LLMServiceError(str(exc), "model_not_found")
+            return LLMServiceError(message, "model_not_found")
+        # A wrapped provider 4xx reports as a transport error but is really a
+        # client error; 502 would tell the caller to retry something that fails
+        # the same way every time.
+        wrapped = wrapped_upstream_status(exc)
+        if wrapped in (401, 403):
+            return LLMServiceError(message, "authentication_error")
+        if wrapped in _NON_RETRYABLE_UPSTREAM_STATUSES:
+            return LLMServiceError(message, "bad_request")
         if isinstance(exc, (litellm.Timeout, litellm.APIConnectionError)):
-            return LLMServiceError(str(exc), "connection_error")
+            return LLMServiceError(message, "connection_error")
         if isinstance(exc, litellm.ServiceUnavailableError):
-            return LLMServiceError(str(exc), "service_unavailable")
-        return LLMServiceError(str(exc), "llm_error", detail=type(exc).__name__)
+            return LLMServiceError(message, "service_unavailable")
+        return LLMServiceError(message, "llm_error", detail=type(exc).__name__)
 
     async def enhance(self, request: EnhanceRequest, resolved_type: str | None = None) -> EnhanceResponse:
         model = self._resolve_model(request)

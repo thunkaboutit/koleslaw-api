@@ -179,3 +179,67 @@ async def test_no_fallback_configured_surfaces_error() -> None:
             await service.enhance(EnhanceRequest(prompt="Write a poem"))
     assert exc_info.value.code == "connection_error"
     assert mock_llm.call_count == 1
+
+
+# ── Wrapped provider client errors ───────────────────────────────────
+#
+# LiteLLM reports an Ollama 400 as APIConnectionError, wrapping the provider's
+# JSON body. APIConnectionError is also the availability signal, so without a
+# guard a plain bad request gets retried on the metered cloud tier and fails
+# there too, at cost. 404 must keep falling back: an instance that lost its
+# model registration answers 404, and that IS an outage.
+
+OLLAMA_400 = (
+    "litellm.APIConnectionError: Ollama_chatException - "
+    '{"error":"{\\"error\\":{\\"code\\":400,\\"message\\":\\"Multimodal data provided, '
+    'but model does not support multimodal requests.\\",\\"type\\":\\"invalid_request_error\\"}}"}'
+)
+
+
+@pytest.mark.asyncio
+async def test_wrapped_provider_400_does_not_fall_back(client: AsyncClient) -> None:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = litellm.APIConnectionError(message=OLLAMA_400, llm_provider="ollama", model=LOCAL)
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    # One call: the cloud tier was never billed for a request that is simply wrong.
+    assert mock_llm.call_count == 1
+    assert response.status_code == 400
+    assert response.json()["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_wrapped_provider_404_still_falls_back(client: AsyncClient) -> None:
+    """A 404 means the instance lost its model registration, which is an outage."""
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [
+            litellm.APIConnectionError(
+                message='Ollama_chatException - {"error":{"code":404,"message":"model not found"}}',
+                llm_provider="ollama",
+                model=LOCAL,
+            ),
+            _fake_completion(),
+        ]
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    assert response.status_code == 200
+    assert response.json()["model_used"] == FALLBACK
+    assert mock_llm.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_error_body_carries_no_provider_text(client: AsyncClient) -> None:
+    """The mapped error reaches the caller sanitised; detail stays in the log."""
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = _conn_error()
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    body = response.text
+    assert "connection refused" not in body
+    assert LOCAL not in body
