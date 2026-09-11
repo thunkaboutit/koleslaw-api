@@ -14,7 +14,12 @@ from pydantic import ValidationError
 from koleslaw_api.prompts.system import get_chat_system_prompt
 from koleslaw_api.schemas.chat import ChatChunk, ChatMessage, ChatRequest, ChatResponse
 from koleslaw_api.services.auth import get_llm_api_key
-from koleslaw_api.services.llm import resolve_allowed_model
+from koleslaw_api.services.llm import (
+    SUPPORTED_IMAGE_MIMES,
+    resolve_allowed_model,
+    resolve_attachment_model,
+    user_facing_llm_error,
+)
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -24,6 +29,9 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 # ── File upload constraints ──────────────────────────────────────────
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_FILE_COUNT = 5
+# Caller-supplied text echoed back in an error is capped, same reason as
+# _MAX_MODEL_ECHO in services/llm.py.
+MAX_FILENAME_ECHO = 80
 
 # MIME type prefixes that are blocked (archives / compressed formats)
 BLOCKED_MIME_PREFIXES: tuple[str, ...] = (
@@ -99,7 +107,20 @@ def _file_to_content_block(data: bytes, mime: str, filename: str) -> dict:
         text = data.decode("utf-8", errors="replace")
         return {"type": "text", "text": f"[Attached file: {filename}]\n\n{text}"}
 
-    # Binary files (images, PDFs, etc.): base64-encode as an image_url block
+    # Every other binary type used to be base64-encoded into an image_url block
+    # too, which no model accepts — a PDF or a video failed deep inside the
+    # provider after we had already encoded and sent the whole thing. Refuse it
+    # here instead, before any of that cost is paid.
+    if mime not in SUPPORTED_IMAGE_MIMES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"'{filename[:MAX_FILENAME_ECHO]}' ({mime}) can't be used as an attachment. "
+                "Attach a JPEG, PNG, GIF or WebP image, or a text file."
+            ),
+        )
+
+    # Images: base64-encode as an image_url block for a vision-capable model.
     b64 = base64.b64encode(data).decode("ascii")
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
 
@@ -152,8 +173,11 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
                 yield _sse_event(chat_chunk.model_dump_json())
         yield _sse_event("[DONE]")
     except Exception as exc:
+        # The raw provider exception used to be streamed to the caller verbatim,
+        # which disclosed backend identity, model tags and upstream JSON. It
+        # still goes to the log in full; the client gets the sanitised line.
         logger.exception("Chat stream failed")
-        error_chunk = ChatChunk(delta=f"\n\n[Error: {exc}]", finish_reason="stop")
+        error_chunk = ChatChunk(delta=f"\n\n[{user_facing_llm_error(exc)}]", finish_reason="stop")
         yield _sse_event(error_chunk.model_dump_json())
         yield _sse_event("[DONE]")
 
@@ -235,6 +259,18 @@ async def chat_stream_with_files(
         data, mime = await _read_and_validate(f)
         block = _file_to_content_block(data, mime, f.filename or "attachment")
         file_blocks.append(block)
+
+    # An image can only run on a vision-capable model, and the self-hosted
+    # default is a text-only fine-tune that answers one with a 400. Route it to
+    # the cloud tier, or refuse when the caller is on the anonymous playground
+    # key. This happens before after_stream is defined so usage is logged
+    # against the model that actually served the request.
+    if any(block.get("type") == "image_url" for block in file_blocks):
+        resolved_model = resolve_attachment_model(
+            resolved_model,
+            request.app.state.settings,
+            getattr(request.state, "api_key_plan", None),
+        )
 
     body = ChatRequest(messages=parsed_messages, model=model, context=context)
     llm_messages = _build_messages_with_files(body, file_blocks)
