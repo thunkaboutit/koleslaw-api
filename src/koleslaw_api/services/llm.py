@@ -240,6 +240,16 @@ class LLMService:
             "LLM call failed: model=%s, type=%s, error=%s", model, type(exc).__name__, exc
         )
 
+    def _primary_retries(self, model: str) -> int:
+        """LiteLLM retries for the first call.  A local-tier model with a
+        cloud fallback gets none: a dead or reclaimed GPU fails every retry
+        the same way, and each one can burn a full timeout (4 x 90s sync)
+        before the fallback answers.  Fail once, fall back at once."""
+        fallback = self._settings.fallback_model
+        if fallback and fallback != model and model.startswith("ollama_chat/"):
+            return 0
+        return 3
+
     def _fall_back_or_raise(self, model: str, exc: Exception) -> str:
         """Return the fallback model for an availability failure on the local
         tier, or raise the mapped error.
@@ -309,7 +319,7 @@ class LLMService:
                 model=model,
                 messages=self._build_messages(request, resolved, model),
                 timeout=timeout,
-                num_retries=3,
+                num_retries=self._primary_retries(model),
             )
         except Exception as exc:
             model = self._fall_back_or_raise(model, exc)
@@ -353,7 +363,7 @@ class LLMService:
                 messages=self._build_messages(request, resolved, model),
                 stream=True,
                 timeout=timeout,
-                num_retries=3,
+                num_retries=self._primary_retries(model),
             )
         except Exception as exc:
             # Fallback only engages before the first byte reaches the
