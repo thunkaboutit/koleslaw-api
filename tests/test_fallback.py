@@ -243,3 +243,73 @@ async def test_error_body_carries_no_provider_text(client: AsyncClient) -> None:
     body = response.text
     assert "connection refused" not in body
     assert LOCAL not in body
+
+
+# ── Retry budget on the local tier ───────────────────────────────────
+#
+# A reclaimed GPU fails every retry the same way, and each retry can burn a
+# full timeout before the fallback answers (4 x 90s on the sync path).  With
+# a fallback configured the local call gets no retries; the cloud call keeps
+# its retries, and a local model with no fallback keeps them too.
+
+
+@pytest.mark.asyncio
+async def test_sync_local_primary_does_not_retry_when_fallback_exists(client: AsyncClient) -> None:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [_conn_error(), _fake_completion()]
+        response = await client.post(
+            "/v1/enhance/sync",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    assert response.status_code == 200
+    assert mock_llm.call_args_list[0].kwargs["num_retries"] == 0
+    assert mock_llm.call_args_list[1].kwargs["num_retries"] == 3
+
+
+@pytest.mark.asyncio
+async def test_stream_local_primary_does_not_retry_when_fallback_exists(client: AsyncClient) -> None:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [_conn_error(), _fake_stream()]
+        response = await client.post(
+            "/v1/enhance",
+            json={"prompt": "Write a poem", "enhancement_type": "refine"},
+        )
+    assert response.status_code == 200
+    assert mock_llm.call_args_list[0].kwargs["num_retries"] == 0
+    assert mock_llm.call_args_list[1].kwargs["num_retries"] == 3
+
+
+@pytest.mark.asyncio
+async def test_local_primary_keeps_retries_without_fallback() -> None:
+    settings = Settings(
+        database_url="postgresql+asyncpg://localhost:5432/test",
+        redis_url="redis://localhost:6379/0",
+        api_key_hash_secret=SecretStr("test-secret"),
+        session_secret=SecretStr("test-session-secret"),
+        environment="development",
+        default_model=LOCAL,
+        fallback_model=None,
+    )
+    service = LLMService(settings)
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        await service.enhance(EnhanceRequest(prompt="Write a poem"))
+    assert mock_llm.call_args.kwargs["num_retries"] == 3
+
+
+@pytest.mark.asyncio
+async def test_cloud_primary_keeps_retries() -> None:
+    settings = Settings(
+        database_url="postgresql+asyncpg://localhost:5432/test",
+        redis_url="redis://localhost:6379/0",
+        api_key_hash_secret=SecretStr("test-secret"),
+        session_secret=SecretStr("test-session-secret"),
+        environment="development",
+        default_model=FALLBACK,
+        fallback_model=FALLBACK,
+    )
+    service = LLMService(settings)
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _fake_completion()
+        await service.enhance(EnhanceRequest(prompt="Write a poem"))
+    assert mock_llm.call_args.kwargs["num_retries"] == 3
