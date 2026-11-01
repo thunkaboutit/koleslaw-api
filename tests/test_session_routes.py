@@ -5,6 +5,7 @@ told apart by an X-Test-Key header standing in for get_current_api_key, so
 ownership is exercised without a database.  No paid calls.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -430,6 +431,66 @@ async def test_the_lock_is_released_after_each_turn(client: AsyncClient, redis: 
 
     await _reply(client, session_id, _answer("Enhanced prompt"))
     assert await redis.get(lock) is None
+
+
+async def _slow_answer():
+    yield _chunk("First ")
+    await asyncio.sleep(30)
+    yield _chunk("never sent")
+    yield _chunk(finish="stop")
+
+
+@pytest.mark.xfail(strict=True, reason="a client abort leaves the turn lock held until its 120s expiry")
+async def test_client_abort_releases_the_lock_and_stores_nothing(
+    app: FastAPI, client: AsyncClient, redis: fakeredis.FakeAsyncRedis
+) -> None:
+    session_id, _, _ = await _start(client, _answer("[[ASK]]\nWhich stack?"))
+    before = await _stored(redis, session_id)
+    lock = f"sess:{hashlib.sha256(session_id.encode()).hexdigest()}:lock"
+
+    # Drive the ASGI app the way uvicorn does (ASGI spec 2.3): Starlette
+    # watches receive() for a disconnect and cancels the stream when it comes.
+    first_text = asyncio.Event()
+    body = json.dumps({"message": "Python"}).encode()
+    sent_body = False
+
+    async def receive() -> dict:
+        nonlocal sent_body
+        if not sent_body:
+            sent_body = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await first_text.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        if message["type"] == "http.response.body" and b'"type":"text"' in message.get("body", b""):
+            first_text.set()
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/v1/sessions/turns",
+        "raw_path": b"/v1/sessions/turns",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode()),
+            (b"x-session-id", session_id.encode()),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80),
+    }
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _slow_answer()
+        await asyncio.wait_for(app(scope, receive, send), timeout=5)
+
+    assert first_text.is_set()
+    assert await redis.get(lock) is None
+    assert await _stored(redis, session_id) == before
 
 
 # --- fallback and stream errors (scenario 13) ------------------------------------
