@@ -23,22 +23,13 @@ from pydantic import SecretStr, TypeAdapter
 
 from koleslaw_api.config import Settings, get_settings
 from koleslaw_api.prompts.system import get_system_prompt
+from koleslaw_api.routes import sessions
+from koleslaw_api.schemas.session import SessionStreamEvent
 from koleslaw_api.services.auth import get_current_api_key
 from koleslaw_api.services.cache import PromptCache
 from koleslaw_api.services.llm import LLMService
+from koleslaw_api.services.session_store import SessionError, SessionStore
 from koleslaw_api.services.turn_protocol import trailer
-
-try:
-    from koleslaw_api.routes import sessions
-    from koleslaw_api.schemas.session import SessionStreamEvent
-    from koleslaw_api.services.session_store import SessionError, SessionStore
-except ImportError:
-    sessions = None
-    SessionStreamEvent = None
-    SessionError = None
-    SessionStore = None
-
-pytestmark = pytest.mark.xfail(strict=True, reason="session routes not built yet")
 
 LOCAL = "ollama_chat/prompt-enhance-14b-think"
 FALLBACK = "anthropic/claude-haiku-4-5"
