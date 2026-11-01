@@ -148,6 +148,7 @@ def test_stream_matches_classify_at_every_split(text: str) -> None:
 
 # --- marker anywhere in the text -------------------------------------------
 
+
 def test_mid_text_marker_is_stripped_and_kind_is_prompt() -> None:
     result = tp.classify("Write a poem.\n[[ASK]]\nMake it short.")
     assert (result.kind, result.text) == ("prompt", "Write a poem.\nMake it short.")
