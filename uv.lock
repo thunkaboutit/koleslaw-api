@@ -1012,6 +1012,7 @@ name = "koleslaw-api"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "filetype" },
@@ -1040,6 +1041,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.12.1" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "filetype", specifier = ">=1.2.0" },
