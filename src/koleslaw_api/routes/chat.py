@@ -22,6 +22,7 @@ from koleslaw_api.services.llm import (
     user_facing_llm_error,
 )
 from koleslaw_api.services.reasoning import split_reasoning
+from koleslaw_api.services.sse import sse_event
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -51,10 +52,6 @@ BLOCKED_MIME_PREFIXES: tuple[str, ...] = (
     "application/x-apple-diskimage",
     "application/java-archive",
 )
-
-
-def _sse_event(data: str) -> str:
-    return f"data: {data}\n\n"
 
 
 def _build_messages(body: ChatRequest) -> list[dict[str, str]]:
@@ -163,16 +160,16 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
             if piece.kind == "text":
                 collected.append(piece.text)
             chat_chunk = ChatChunk(delta=piece.text, finish_reason=piece.finish_reason, type=piece.kind)
-            yield _sse_event(chat_chunk.model_dump_json())
-        yield _sse_event("[DONE]")
+            yield sse_event(chat_chunk.model_dump_json())
+        yield sse_event("[DONE]")
     except Exception as exc:
         # The raw provider exception used to be streamed to the caller verbatim,
         # which disclosed backend identity, model tags and upstream JSON. It
         # still goes to the log in full; the client gets the sanitised line.
         logger.exception("Chat stream failed")
         error_chunk = ChatChunk(delta=f"\n\n[{user_facing_llm_error(exc)}]", finish_reason="stop")
-        yield _sse_event(error_chunk.model_dump_json())
-        yield _sse_event("[DONE]")
+        yield sse_event(error_chunk.model_dump_json())
+        yield sse_event("[DONE]")
 
 
 # ── Endpoints ────────────────────────────────────────────────────────

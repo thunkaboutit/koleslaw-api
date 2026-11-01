@@ -12,45 +12,12 @@ from koleslaw_api.services.auth import get_llm_api_key
 from koleslaw_api.services.cache import PromptCache
 from koleslaw_api.services.enhance import enhance_once
 from koleslaw_api.services.llm import LLMService, resolve_allowed_model
+from koleslaw_api.services.sse import sse_event, with_keepalive
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["enhance"])
-
-
-def _sse_event(data: str) -> str:
-    return f"data: {data}\n\n"
-
-
-# Cloudflare drops proxied connections that stay silent for 100s (not
-# configurable below Enterprise). The thinking phase of a reasoning model
-# produces no enhance deltas, so long generations 524'd. SSE comment lines
-# every KEEPALIVE_SECONDS keep bytes flowing; spec-compliant and line-based
-# ("data: "-prefixed) parsers both ignore them.
-KEEPALIVE_SECONDS = 20.0
-_KEEPALIVE = ": keepalive\n\n"
-
-
-async def _with_keepalive(agen):
-    """Yield from an async generator, emitting SSE comments during stalls."""
-    next_task = None
-    try:
-        while True:
-            if next_task is None:
-                next_task = asyncio.ensure_future(anext(agen))
-            done, _ = await asyncio.wait({next_task}, timeout=KEEPALIVE_SECONDS)
-            if not done:
-                yield _KEEPALIVE
-                continue
-            next_task = None
-            try:
-                yield done.pop().result()
-            except StopAsyncIteration:
-                return
-    finally:
-        if next_task is not None:
-            next_task.cancel()
 
 
 @router.post("/enhance")
@@ -74,8 +41,8 @@ async def enhance_stream(
         )
 
         async def cached_stream():
-            yield _sse_event(hit.model_dump_json())
-            yield _sse_event("[DONE]")
+            yield sse_event(hit.model_dump_json())
+            yield sse_event("[DONE]")
 
         response = StreamingResponse(
             cached_stream(),
@@ -104,15 +71,15 @@ async def enhance_stream(
     async def stream_chunks():
         async for chunk in llm.enhance_stream(body, resolved_type):
             collected.append(chunk.delta)
-            yield _sse_event(chunk.model_dump_json())
+            yield sse_event(chunk.model_dump_json())
 
     async def generate():
         # First byte goes out immediately so the proxy sees a response even
         # while the request is queued behind a model load.
         yield ": connected\n\n"
-        async for event in _with_keepalive(aiter(stream_chunks())):
+        async for event in with_keepalive(aiter(stream_chunks())):
             yield event
-        yield _sse_event("[DONE]")
+        yield sse_event("[DONE]")
 
     async def after_stream():
         await asyncio.sleep(0)
