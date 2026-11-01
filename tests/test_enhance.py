@@ -141,9 +141,9 @@ async def test_enhance_stream_emits_keepalive_during_stall(client: AsyncClient, 
     Cloudflare kills proxied connections after 100s of silence."""
     import asyncio as aio
 
-    from koleslaw_api.routes import enhance as enhance_route
+    from koleslaw_api.services import sse
 
-    monkeypatch.setattr(enhance_route, "KEEPALIVE_SECONDS", 0.05)
+    monkeypatch.setattr(sse, "KEEPALIVE_SECONDS", 0.05)
 
     async def _slow_stream():
         await aio.sleep(0.2)  # stall longer than the keepalive window

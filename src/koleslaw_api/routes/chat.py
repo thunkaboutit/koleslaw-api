@@ -18,8 +18,11 @@ from koleslaw_api.services.llm import (
     SUPPORTED_IMAGE_MIMES,
     resolve_allowed_model,
     resolve_attachment_model,
+    split_completion_stream,
     user_facing_llm_error,
 )
+from koleslaw_api.services.reasoning import split_reasoning
+from koleslaw_api.services.sse import sse_event
 from koleslaw_api.services.usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -49,10 +52,6 @@ BLOCKED_MIME_PREFIXES: tuple[str, ...] = (
     "application/x-apple-diskimage",
     "application/java-archive",
 )
-
-
-def _sse_event(data: str) -> str:
-    return f"data: {data}\n\n"
 
 
 def _build_messages(body: ChatRequest) -> list[dict[str, str]]:
@@ -157,29 +156,20 @@ async def _stream_chat(model: str, messages: list[dict], collected: list[str]):
             stream=True,
             num_retries=3,
         )
-        async for chunk in response:
-            choice = chunk.choices[0]
-            delta = choice.delta.content or ""
-            reasoning = getattr(choice.delta, "reasoning_content", None) or ""
-            finish_reason = choice.finish_reason
-
-            if reasoning:
-                thinking_chunk = ChatChunk(delta=reasoning, type="thinking")
-                yield _sse_event(thinking_chunk.model_dump_json())
-            if delta or finish_reason:
-                if delta:
-                    collected.append(delta)
-                chat_chunk = ChatChunk(delta=delta, finish_reason=finish_reason)
-                yield _sse_event(chat_chunk.model_dump_json())
-        yield _sse_event("[DONE]")
+        async for piece in split_completion_stream(response):
+            if piece.kind == "text":
+                collected.append(piece.text)
+            chat_chunk = ChatChunk(delta=piece.text, finish_reason=piece.finish_reason, type=piece.kind)
+            yield sse_event(chat_chunk.model_dump_json())
+        yield sse_event("[DONE]")
     except Exception as exc:
         # The raw provider exception used to be streamed to the caller verbatim,
         # which disclosed backend identity, model tags and upstream JSON. It
         # still goes to the log in full; the client gets the sanitised line.
         logger.exception("Chat stream failed")
         error_chunk = ChatChunk(delta=f"\n\n[{user_facing_llm_error(exc)}]", finish_reason="stop")
-        yield _sse_event(error_chunk.model_dump_json())
-        yield _sse_event("[DONE]")
+        yield sse_event(error_chunk.model_dump_json())
+        yield sse_event("[DONE]")
 
 
 # ── Endpoints ────────────────────────────────────────────────────────
@@ -323,7 +313,7 @@ async def chat_sync(
     )
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    content = response.choices[0].message.content
+    content = split_reasoning(response.choices[0].message.content).text
     input_tokens = response.usage.prompt_tokens
     output_tokens = response.usage.completion_tokens
 

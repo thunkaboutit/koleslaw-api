@@ -1,0 +1,10 @@
+: connected
+
+data: {"delta":"Enhanced ","finish_reason":null}
+
+data: {"delta":"prompt","finish_reason":null}
+
+data: {"delta":"","finish_reason":"stop"}
+
+data: [DONE]
+

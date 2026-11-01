@@ -1,0 +1,18 @@
+{
+  "content": [
+    {
+      "text": "{\n  \"enhanced_prompt\": \"Enhanced prompt result\",\n  \"model_used\": \"ollama_chat/prompt-enhance-14b-think\",\n  \"usage\": {\n    \"input_tokens\": 10,\n    \"output_tokens\": 20\n  },\n  \"cached\": false\n}",
+      "type": "text"
+    }
+  ],
+  "isError": false,
+  "structuredContent": {
+    "cached": false,
+    "enhanced_prompt": "Enhanced prompt result",
+    "model_used": "ollama_chat/prompt-enhance-14b-think",
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 20
+    }
+  }
+}

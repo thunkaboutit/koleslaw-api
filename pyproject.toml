@@ -19,6 +19,7 @@ dependencies = [
     "filetype>=1.2.0",
     "stripe>=15.3.1",
     "mcp>=2.1.1",
+    "anyio>=4.12.1",
 ]
 
 [dependency-groups]
@@ -28,6 +29,7 @@ dev = [
     "pytest-httpx",
     "ruff>=0.15.6",
     "mypy",
+    "fakeredis>=2.40.0",
 ]
 
 [build-system]

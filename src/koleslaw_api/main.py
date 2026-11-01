@@ -12,10 +12,11 @@ from redis.asyncio import Redis
 from koleslaw_api.config import Settings, get_settings
 from koleslaw_api.db.engine import async_session_factory, create_engine
 from koleslaw_api.mcp_server import mount_mcp_server
-from koleslaw_api.routes import account, auth, billing, chat, enhance, health, keys, models, usage
+from koleslaw_api.routes import account, auth, billing, chat, enhance, health, keys, models, sessions, usage
 from koleslaw_api.schemas.enhance import ErrorResponse
 from koleslaw_api.services.cache import PromptCache
 from koleslaw_api.services.llm import LLMService, LLMServiceError
+from koleslaw_api.services.session_store import SessionError, SessionStore
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s:     %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.llm_service = LLMService(settings)
     app.state.cache = PromptCache(redis)
+    app.state.session_store = SessionStore(redis, ttl_seconds=settings.session_ttl_seconds)
 
     # The MCP session manager's task group has to be owned by this lifespan.
     # Without it the mounted endpoint 500s on its first call with "task group
@@ -122,6 +124,7 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(enhance.router)
 app.include_router(chat.router)
+app.include_router(sessions.router)
 app.include_router(keys.router)
 app.include_router(usage.router)
 app.include_router(auth.router)
@@ -159,6 +162,13 @@ async def llm_error_handler(request: Request, exc: LLMServiceError) -> JSONRespo
     status_code = status_map.get(exc.code, 500)
     body = ErrorResponse(error=str(exc), code=exc.code, detail=exc.detail)
     return JSONResponse(status_code=status_code, content=body.model_dump(), headers=_cors_headers(request))
+
+
+@app.exception_handler(SessionError)
+async def session_error_handler(request: Request, exc: SessionError) -> JSONResponse:
+    response = sessions.session_error_response(exc)
+    response.headers.update(_cors_headers(request))
+    return response
 
 
 @app.exception_handler(Exception)

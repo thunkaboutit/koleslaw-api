@@ -60,7 +60,10 @@ async def enhance_once(
     result = await llm.enhance(body, resolved_type)
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    await cache.set(body.prompt, resolved_type, model, result.enhanced_prompt, ttl=settings.cache_ttl_seconds)
+    # An empty answer (a model that returned only reasoning) is a failed
+    # generation, not a result to serve for the next 24 h.
+    if result.enhanced_prompt:
+        await cache.set(body.prompt, resolved_type, model, result.enhanced_prompt, ttl=settings.cache_ttl_seconds)
 
     await log_usage(
         db_session_factory,
