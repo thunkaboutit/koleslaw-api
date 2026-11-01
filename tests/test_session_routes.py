@@ -440,7 +440,6 @@ async def _slow_answer():
     yield _chunk(finish="stop")
 
 
-@pytest.mark.xfail(strict=True, reason="a client abort leaves the turn lock held until its 120s expiry")
 async def test_client_abort_releases_the_lock_and_stores_nothing(
     app: FastAPI, client: AsyncClient, redis: fakeredis.FakeAsyncRedis
 ) -> None:

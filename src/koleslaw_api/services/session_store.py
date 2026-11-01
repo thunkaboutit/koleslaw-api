@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
+import anyio
 from redis.asyncio import Redis
 
 from koleslaw_api.services.turn_protocol import TurnKind
@@ -133,6 +134,10 @@ class SessionStore:
         try:
             yield
         finally:
-            held = await self._redis.get(lock_key)
-            if held is not None and (held.decode() if isinstance(held, bytes) else held) == token:
-                await self._redis.delete(lock_key)
+            # Shielded: a client abort cancels the stream's task group, and
+            # without the shield these awaits are cancelled too, leaving the
+            # lock held until it expires.
+            with anyio.CancelScope(shield=True):
+                held = await self._redis.get(lock_key)
+                if held is not None and (held.decode() if isinstance(held, bytes) else held) == token:
+                    await self._redis.delete(lock_key)
