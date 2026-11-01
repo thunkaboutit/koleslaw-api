@@ -145,3 +145,26 @@ async def test_mcp_enhance_prompt_drops_reasoning(app: FastAPI, settings: Settin
             result = await _call_tool(mcp_client, {"prompt": "Write a poem"})
 
     assert result["structuredContent"]["enhanced_prompt"] == "Enhanced prompt"
+
+
+# --- Empty answers are never cached --------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(strict=True, reason="enhance_once caches an empty result")
+async def test_enhance_sync_never_caches_a_reasoning_only_answer(client: AsyncClient, mock_redis: AsyncMock) -> None:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _completion("<think>only reasoning</think>")
+        response = await client.post("/v1/enhance/sync", json={"prompt": "Write a poem", "enhancement_type": "refine"})
+
+    assert response.json()["enhanced_prompt"] == ""
+    mock_redis.set.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_enhance_stream_never_caches_a_reasoning_only_answer(client: AsyncClient, mock_redis: AsyncMock) -> None:
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _stream(_chunk(reasoning="only reasoning"), _chunk(finish="stop"))
+        await client.post("/v1/enhance", json={"prompt": "Write a poem", "enhancement_type": "refine"})
+
+    mock_redis.set.assert_not_called()
