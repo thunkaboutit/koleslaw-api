@@ -148,34 +148,26 @@ def test_stream_matches_classify_at_every_split(text: str) -> None:
 
 # --- marker anywhere in the text -------------------------------------------
 
-_XFAIL = pytest.mark.xfail(strict=True, reason="mid-text marker not yet stripped")
-
-
-@_XFAIL
 def test_mid_text_marker_is_stripped_and_kind_is_prompt() -> None:
     result = tp.classify("Write a poem.\n[[ASK]]\nMake it short.")
     assert (result.kind, result.text) == ("prompt", "Write a poem.\nMake it short.")
 
 
-@_XFAIL
 def test_mid_text_marker_in_finalize_mode_is_stripped() -> None:
     result = tp.classify("Write a poem. [[ASK]]\nShort.", "finalize")
     assert (result.kind, result.text) == ("prompt", "Write a poem. Short.")
 
 
-@_XFAIL
 def test_every_marker_is_stripped() -> None:
     result = tp.classify("a [[ASK]]b [[ASK]]\nc [[ASK]]")
     assert (result.kind, result.text) == ("prompt", "a b c ")
 
 
-@_XFAIL
 def test_leading_marker_still_decides_question_when_others_follow() -> None:
     result = tp.classify("[[ASK]]\nWhich?\n[[ASK]]\nAnd?")
     assert (result.kind, result.text) == ("question", "Which?\nAnd?")
 
 
-@_XFAIL
 def test_stream_marker_split_mid_text_never_reaches_the_client() -> None:
     out, result = _stream(["Some text [[A", "SK]]\nmore"])
     assert "".join(out) == "Some text more"
@@ -183,7 +175,6 @@ def test_stream_marker_split_mid_text_never_reaches_the_client() -> None:
     assert (result.kind, result.text) == ("prompt", "Some text more")
 
 
-@_XFAIL
 def test_stream_holds_only_a_possible_marker_prefix() -> None:
     f = tp.MarkerFilter("reply")
     assert f.feed("ab [") == "ab "
@@ -193,7 +184,6 @@ def test_stream_holds_only_a_possible_marker_prefix() -> None:
     assert f.flush() == "[["
 
 
-@_XFAIL
 def test_stream_matches_classify_at_every_split_with_marker_anywhere() -> None:
     text = "Intro [[ASK]]\nmid [[ASK]] end"
     expected = tp.classify(text)
