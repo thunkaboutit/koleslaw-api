@@ -28,6 +28,7 @@ dev = [
     "pytest-httpx",
     "ruff>=0.15.6",
     "mypy",
+    "fakeredis>=2.40.0",
 ]
 
 [build-system]
