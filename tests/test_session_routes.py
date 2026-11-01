@@ -629,7 +629,6 @@ async def test_daily_quota_is_counted_once_per_session(client: AsyncClient, redi
     assert response.status_code == 429
 
 
-@pytest.mark.xfail(strict=True, reason="the daily quota is charged before the start is checked")
 @pytest.mark.parametrize(
     ("body", "status"),
     [({"prompt": "word " * 400}, 409), ({"prompt": ""}, 422), ({"prompt": "hi", "enhancement_type": "rewrite"}, 422)],

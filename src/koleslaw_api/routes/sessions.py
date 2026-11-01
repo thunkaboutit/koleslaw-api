@@ -2,9 +2,10 @@
 
 The session id travels in the ``X-Session-Id`` header, never the path, and is
 never logged (uvicorn's access log records paths).  Quota (D4): the daily cap
-is counted once, on ``POST /v1/sessions`` (``get_llm_api_key``).  Turns and
-delete use ``get_current_api_key``, so every one still passes the per-key
-rate limit.  Sessions never read or write the prompt cache.
+is counted once, on ``POST /v1/sessions`` (``get_llm_api_key``), and only
+after the body has validated and passed the token cap, so a rejected start
+costs nothing.  Every endpoint depends on ``get_current_api_key``, so every
+request still passes the per-key rate limit.  Sessions never read or write the prompt cache.
 
 A turn goes get, lock, get again, cap checks, stream, store.  Anything that
 fails before the stream is an HTTP error with an ``ErrorResponse`` body.
@@ -21,6 +22,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
 
 from koleslaw_api.config import Settings
 from koleslaw_api.prompts.system import classify_enhancement_type
@@ -32,7 +34,7 @@ from koleslaw_api.schemas.session import (
     TurnEvent,
     TurnRequest,
 )
-from koleslaw_api.services.auth import get_current_api_key, get_llm_api_key
+from koleslaw_api.services.auth import get_current_api_key, get_llm_api_key, security
 from koleslaw_api.services.llm import LLMServiceError
 from koleslaw_api.services.session_store import (
     Session,
@@ -110,7 +112,8 @@ async def _lock(store: SessionStore, session_id: str) -> AsyncExitStack:
 async def start_session(
     request: Request,
     body: StartSessionRequest,
-    api_key_id: uuid.UUID | None = Depends(get_llm_api_key),  # noqa: B008
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
+    api_key_id: uuid.UUID | None = Depends(get_current_api_key),  # noqa: B008
 ) -> StreamingResponse:
     settings: Settings = request.app.state.settings
     store: SessionStore = request.app.state.session_store
@@ -123,6 +126,10 @@ async def start_session(
     draft = Session(owner=owner, context=body.context, enhancement_type=resolved_type)
     user = TurnInput(body.prompt, _mode(draft, "reply", settings))
     _check_tokens(draft, user, model, settings)
+    # Charge the daily quota last.  As a dependency it would run before the
+    # body is validated (FastAPI resolves dependencies first), so a 422 or a
+    # start over the token cap would spend a visitor's quota.
+    await get_llm_api_key(request, credentials, settings, api_key_id)
 
     session_id, session = await store.create(owner, context=body.context, enhancement_type=resolved_type)
     lock = await _lock(store, session_id)
