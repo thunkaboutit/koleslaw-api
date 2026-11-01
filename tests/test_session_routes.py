@@ -629,6 +629,32 @@ async def test_daily_quota_is_counted_once_per_session(client: AsyncClient, redi
     assert response.status_code == 429
 
 
+@pytest.mark.xfail(strict=True, reason="the daily quota is charged before the start is checked")
+@pytest.mark.parametrize(
+    ("body", "status"),
+    [({"prompt": "word " * 400}, 409), ({"prompt": ""}, 422), ({"prompt": "hi", "enhancement_type": "rewrite"}, 422)],
+)
+async def test_a_rejected_start_costs_no_quota(
+    app: FastAPI, client: AsyncClient, redis: fakeredis.FakeAsyncRedis, body: dict, status: int
+) -> None:
+    app.state.settings = _settings(session_max_input_tokens=200)
+    counter = f"anon_daily:{datetime.now(UTC).strftime('%Y-%m-%d')}:203.0.113.7"
+    await redis.set(counter, 5)
+    anon = {"Authorization": f"Bearer {PUBLIC_KEY}", "CF-Connecting-IP": "203.0.113.7"}
+
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        response = await client.post("/v1/sessions", json=body, headers=anon)
+    assert response.status_code == status
+    mock_llm.assert_not_called()
+    assert int(await redis.get(counter)) == 5
+
+    with patch("koleslaw_api.services.llm.acompletion", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _answer("[[ASK]]\nWhich stack?")
+        response = await client.post("/v1/sessions", json={"prompt": PROMPT}, headers=anon)
+    assert response.status_code == 200
+    assert int(await redis.get(counter)) == 6
+
+
 async def test_every_turn_passes_the_rate_limit(app: FastAPI, client: AsyncClient) -> None:
     session_id, _, _ = await _start(client, _answer("[[ASK]]\nWhich stack?"))
 
