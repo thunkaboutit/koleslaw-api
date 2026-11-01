@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from collections.abc import AsyncGenerator, AsyncIterable
+from collections.abc import AsyncGenerator, AsyncIterable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -195,6 +195,35 @@ def user_facing_llm_error(exc: Exception) -> str:
     return _GENERIC_LLM_ERROR
 
 
+Messages = list[dict[str, str]]
+# Builds the model input for one model id.  Called again for the fallback
+# model, because a local model and a cloud model need different messages.
+MessagesBuilder = Callable[[str], Messages]
+
+
+def is_local_model(model: str) -> bool:
+    """Served by our Ollama tier, whose Modelfile carries the system prompt."""
+    return model.startswith("ollama_chat/")
+
+
+def with_context(content: str, context: str | None) -> str:
+    """A user turn for a local model, with the caller's context appended."""
+    if not context:
+        return content
+    return (
+        f"{content}\n\n--- Additional Context ---\n"
+        f"Context about the use case, to inform enhancement decisions:\n\n{context}"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ModelStream:
+    """An opened model stream and the model that is serving it."""
+
+    model: str
+    deltas: AsyncGenerator["StreamDelta", None]
+
+
 @dataclass(frozen=True, slots=True)
 class StreamDelta:
     """One split piece of a LiteLLM stream.  ``finish_reason`` rides on text."""
@@ -259,15 +288,8 @@ class LLMService:
         # it. Cloud fallback models have no Modelfile, so they still get the
         # per-type prompt; without it they'd answer the prompt instead of
         # enhancing it.
-        if model.startswith("ollama_chat/"):
-            content = request.prompt
-            if request.context:
-                content += (
-                    "\n\n--- Additional Context ---\n"
-                    "Context about the use case, to inform enhancement "
-                    f"decisions:\n\n{request.context}"
-                )
-            return [{"role": "user", "content": content}]
+        if is_local_model(model):
+            return [{"role": "user", "content": with_context(request.prompt, request.context)}]
         system_prompt = get_system_prompt(resolved_type, request.context)
         return [
             {"role": "system", "content": system_prompt},
@@ -387,34 +409,45 @@ class LLMService:
     async def enhance_stream(
         self, request: EnhanceRequest, resolved_type: str | None = None
     ) -> AsyncGenerator[EnhanceChunk, None]:
-        model = self._resolve_model(request)
         resolved = resolved_type or self.resolve_enhancement_type(request)
+        stream = await self.stream_messages(
+            lambda model: self._build_messages(request, resolved, model), self._resolve_model(request)
+        )
+        async for piece in stream.deltas:
+            if piece.kind == "text":
+                yield EnhanceChunk(delta=piece.text, finish_reason=piece.finish_reason)
+
+    async def stream_messages(self, build_messages: MessagesBuilder, model: str) -> ModelStream:
+        """Open a split stream on ``model``, falling back before the first byte.
+
+        ``build_messages`` is called once per model tried, so the fallback
+        gets input shaped for it.  A failure while the stream is being read
+        is raised as ``LLMServiceError``; it cannot fall back without
+        duplicating output.
+        """
         # Streaming timeouts are between-read, not total-duration: this caps
         # how long a request may sit in Ollama's queue waiting for its first
         # token (the server sends nothing until a slot frees), while an
         # active generation streams tokens far more often than the ceiling
         # and is never cut off. Ollama serves one request at a time, so under
         # a burst this is what turns "hang for minutes" into "cloud fallback
-        # in seconds" — see also OLLAMA_MAX_QUEUE on the instance, which
+        # in seconds". See also OLLAMA_MAX_QUEUE on the instance, which
         # 503s excess queue depth instantly for the same reason.
         timeout = self._settings.llm_stream_timeout_seconds
         try:
             response = await acompletion(
                 model=model,
-                messages=self._build_messages(request, resolved, model),
+                messages=build_messages(model),
                 stream=True,
                 timeout=timeout,
                 num_retries=self._primary_retries(model),
             )
         except Exception as exc:
-            # Fallback only engages before the first byte reaches the
-            # client; a mid-stream failure can't be retried without
-            # duplicating output, so it propagates as before.
             model = self._fall_back_or_raise(model, exc)
             try:
                 response = await acompletion(
                     model=model,
-                    messages=self._build_messages(request, resolved, model),
+                    messages=build_messages(model),
                     stream=True,
                     timeout=timeout,
                     num_retries=3,
@@ -422,10 +455,15 @@ class LLMService:
             except Exception as fallback_exc:
                 self._log_llm_error(fallback_exc, model)
                 raise self._map_exception(fallback_exc) from fallback_exc
+        return ModelStream(model, self._read_stream(response, model))
 
-        async for piece in split_completion_stream(response):
-            if piece.kind == "text":
-                yield EnhanceChunk(delta=piece.text, finish_reason=piece.finish_reason)
+    async def _read_stream(self, response: AsyncIterable[Any], model: str) -> AsyncGenerator[StreamDelta, None]:
+        try:
+            async for piece in split_completion_stream(response):
+                yield piece
+        except Exception as exc:
+            self._log_llm_error(exc, model)
+            raise self._map_exception(exc) from exc
 
     async def get_available_models(self) -> list[ModelInfo]:
         models: list[ModelInfo] = []
