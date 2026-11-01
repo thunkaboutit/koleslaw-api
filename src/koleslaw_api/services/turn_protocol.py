@@ -7,17 +7,23 @@ There is no "ends with ?" heuristic: enhanced prompts often end in one.
 
 ``classify`` is the pure rule over a whole answer.  ``MarkerFilter`` applies
 the same rule to a stream of answer text (after ``ReasoningSplitter``): it
-holds back leading text only while it could still be the marker, so the
-marker never reaches the client, then passes text straight through.
+holds back only a trailing piece that could still be the start of a marker
+and releases it as soon as it cannot be, so no marker ever reaches the client.
 
 Rules:
 
-- Leading whitespace before the marker is ignored.  Whitespace right after it
-  is dropped.
-- In finalize mode the marker is still stripped, but the kind is ``prompt``.
-- Text that is blank once the marker is removed is ``empty``.
+- Every marker is stripped, wherever the model puts it, together with one
+  newline right after it if present (so no blank line is left behind).
+- The kind is decided only by position: a marker at the start of the answer
+  (after optional whitespace) makes it a ``question`` in reply mode.  A marker
+  anywhere else is just removed and the answer stays a ``prompt``.
+- After a leading marker, whitespace before the first real character is
+  dropped, as is the whitespace before the marker.
+- In finalize mode the markers are still stripped, but the kind is ``prompt``.
+- Text that is blank once the markers are removed is ``empty``.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -25,6 +31,7 @@ TurnMode = Literal["reply", "finalize"]
 TurnKind = Literal["question", "prompt", "empty"]
 
 ASK_MARKER = "[[ASK]]"
+_MARKER_RE = re.compile(re.escape(ASK_MARKER) + r"\n?")
 
 _TRAILERS: dict[TurnMode, str] = {
     "reply": (
@@ -56,11 +63,15 @@ def _kind(text: str, asked: bool, mode: TurnMode) -> TurnKind:
     return "question" if asked and mode == "reply" else "prompt"
 
 
+def _strip_markers(text: str) -> str:
+    return _MARKER_RE.sub("", text)
+
+
 def classify(text: str, mode: TurnMode = "reply") -> Classified:
-    stripped = text.lstrip()
-    asked = stripped.startswith(ASK_MARKER)
+    asked = text.lstrip().startswith(ASK_MARKER)
+    text = _strip_markers(text)
     if asked:
-        text = stripped[len(ASK_MARKER) :].lstrip()
+        text = text.lstrip()
     kind = _kind(text, asked, mode)
     return Classified(kind, "" if kind == "empty" else text)
 
@@ -70,46 +81,64 @@ class MarkerFilter:
 
     def __init__(self, mode: TurnMode = "reply") -> None:
         self._mode = mode
-        self._held = ""
-        self._decided = False
+        self._buf = ""  # raw text not yet processed (may end in a marker prefix)
+        self._lead = ""  # whitespace-only text held until the first real character
+        self._seen_text = False
         self._asked = False
-        self._strip_leading = False
+        self._skip_newline = False
         self._emitted: list[str] = []
 
     def feed(self, delta: str) -> str:
-        if self._decided:
-            return self._emit(delta)
-        self._held += delta
-        head = self._held.lstrip()
-        if ASK_MARKER.startswith(head):
-            return ""
-        self._decided = True
-        self._asked = head.startswith(ASK_MARKER)
-        if self._asked:
-            self._strip_leading = True
-            return self._emit(head[len(ASK_MARKER) :])
-        return self._emit(self._held)
+        self._buf += delta
+        return self._drain(final=False)
 
     def flush(self) -> str:
-        if self._decided:
-            return ""
-        self._decided = True
-        head = self._held.lstrip()
-        self._asked = head == ASK_MARKER
-        if not head or self._asked:
-            return ""
-        return self._emit(self._held)
+        return self._drain(final=True)
 
     def result(self) -> Classified:
         text = "".join(self._emitted)
         kind = _kind(text, self._asked, self._mode)
         return Classified(kind, "" if kind == "empty" else text)
 
+    def _drain(self, final: bool) -> str:
+        out: list[str] = []
+        while self._buf:
+            if self._skip_newline:
+                self._skip_newline = False
+                if self._buf.startswith("\n"):
+                    self._buf = self._buf[1:]
+                    continue
+            idx = self._buf.find(ASK_MARKER)
+            if idx >= 0:
+                out.append(self._emit(self._buf[:idx]))
+                self._buf = self._buf[idx + len(ASK_MARKER) :]
+                if not self._seen_text:
+                    self._asked = True
+                    self._lead = ""
+                self._skip_newline = True
+                continue
+            keep = 0 if final else self._partial_marker_len()
+            out.append(self._emit(self._buf[: len(self._buf) - keep]))
+            self._buf = self._buf[len(self._buf) - keep :]
+            break
+        return "".join(out)
+
+    def _partial_marker_len(self) -> int:
+        for k in range(len(ASK_MARKER) - 1, 0, -1):
+            if self._buf.endswith(ASK_MARKER[:k]):
+                return k
+        return 0
+
     def _emit(self, text: str) -> str:
-        if self._strip_leading:
+        if self._asked and not self._seen_text:
             text = text.lstrip()
-            if text:
-                self._strip_leading = False
-        if text:
-            self._emitted.append(text)
+        if not text:
+            return ""
+        if not self._seen_text:
+            if not text.strip():
+                self._lead += text
+                return ""
+            self._seen_text = True
+            text, self._lead = self._lead + text, ""
+        self._emitted.append(text)
         return text
