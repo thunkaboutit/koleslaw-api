@@ -6,12 +6,7 @@ Chunk lists mirror what LiteLLM 1.82.2 hands us in ``delta.content`` and
 
 import pytest
 
-# Strict xfail until the splitter lands; the fix commit removes this block.
-pytestmark = pytest.mark.xfail(strict=True, reason="reasoning splitter not built yet")
-try:
-    from koleslaw_api.services.reasoning import Part, ReasoningSplitter, split_reasoning
-except ImportError:
-    Part = ReasoningSplitter = split_reasoning = None
+from koleslaw_api.services.reasoning import Part, ReasoningSplitter, split_reasoning
 
 
 def _run(chunks: list[tuple[str | None, str | None]]) -> tuple[str, str, list[Part]]:

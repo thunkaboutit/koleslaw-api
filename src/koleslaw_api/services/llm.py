@@ -1,7 +1,9 @@
 import logging
 import os
 import re
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterable
+from dataclasses import dataclass
+from typing import Any
 
 import httpx
 import litellm
@@ -17,6 +19,7 @@ from koleslaw_api.schemas.enhance import (
     ModelInfo,
     Usage,
 )
+from koleslaw_api.services.reasoning import PartKind, ReasoningSplitter, split_reasoning
 
 # How much of a rejected model string to echo back in the 400 — enough to
 # debug a legitimate typo, capped so a hostile over-long value isn't reflected.
@@ -192,6 +195,43 @@ def user_facing_llm_error(exc: Exception) -> str:
     return _GENERIC_LLM_ERROR
 
 
+@dataclass(frozen=True, slots=True)
+class StreamDelta:
+    """One split piece of a LiteLLM stream.  ``finish_reason`` rides on text."""
+
+    kind: PartKind
+    text: str
+    finish_reason: str | None = None
+
+
+async def split_completion_stream(response: AsyncIterable[Any]) -> AsyncGenerator[StreamDelta, None]:
+    """Run a LiteLLM stream through the reasoning splitter.
+
+    Native ``reasoning_content`` and inline ``<think>`` blocks come out as
+    thinking.  A chunk's finish_reason is attached to its last text piece,
+    or to an empty text piece when it has none, so callers see the same
+    terminal chunk they always did.
+    """
+    splitter = ReasoningSplitter()
+    async for chunk in response:
+        choice = chunk.choices[0]
+        reasoning = getattr(choice.delta, "reasoning_content", None)
+        parts = splitter.feed(choice.delta.content or "", reasoning if isinstance(reasoning, str) else None)
+        finish_reason = choice.finish_reason
+        if not finish_reason:
+            for part in parts:
+                yield StreamDelta(part.kind, part.text)
+            continue
+        parts += splitter.flush()
+        last_text = max((i for i, p in enumerate(parts) if p.kind == "text"), default=None)
+        for i, part in enumerate(parts):
+            yield StreamDelta(part.kind, part.text, finish_reason if i == last_text else None)
+        if last_text is None:
+            yield StreamDelta("text", "", finish_reason)
+    for part in splitter.flush():
+        yield StreamDelta(part.kind, part.text)
+
+
 class LLMService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -335,7 +375,8 @@ class LLMService:
                 raise self._map_exception(fallback_exc) from fallback_exc
 
         return EnhanceResponse(
-            enhanced_prompt=response.choices[0].message.content,
+            # Reasoning is never part of a one-shot answer (Chrome, hook, MCP).
+            enhanced_prompt=split_reasoning(response.choices[0].message.content).text,
             model_used=model,
             usage=Usage(
                 input_tokens=response.usage.prompt_tokens,
@@ -382,11 +423,9 @@ class LLMService:
                 self._log_llm_error(fallback_exc, model)
                 raise self._map_exception(fallback_exc) from fallback_exc
 
-        async for chunk in response:
-            delta = chunk.choices[0].delta.content or ""
-            finish_reason = chunk.choices[0].finish_reason
-            if delta or finish_reason:
-                yield EnhanceChunk(delta=delta, finish_reason=finish_reason)
+        async for piece in split_completion_stream(response):
+            if piece.kind == "text":
+                yield EnhanceChunk(delta=piece.text, finish_reason=piece.finish_reason)
 
     async def get_available_models(self) -> list[ModelInfo]:
         models: list[ModelInfo] = []

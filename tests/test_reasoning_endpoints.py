@@ -9,9 +9,6 @@ from httpx import AsyncClient
 
 from koleslaw_api.config import Settings
 
-# Strict xfail until the splitter is wired in; the fix commit removes this.
-pytestmark = pytest.mark.xfail(strict=True, reason="reasoning splitter not wired in yet")
-
 
 def _completion(content: str | None) -> MagicMock:
     resp = MagicMock()
