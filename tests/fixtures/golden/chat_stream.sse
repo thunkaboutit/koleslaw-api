@@ -1,0 +1,12 @@
+data: {"delta":"Let me think","finish_reason":null,"type":"thinking"}
+
+data: {"delta":" about this...","finish_reason":null,"type":"thinking"}
+
+data: {"delta":"Enhanced ","finish_reason":null,"type":"text"}
+
+data: {"delta":"prompt","finish_reason":null,"type":"text"}
+
+data: {"delta":"","finish_reason":"stop","type":"text"}
+
+data: [DONE]
+
