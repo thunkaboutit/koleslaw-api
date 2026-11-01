@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     stripe_secret_key: SecretStr | None = None
     stripe_webhook_secret: SecretStr | None = None
     cache_ttl_seconds: int = 86400
+    # Model sessions (model-sessions PRD).  Off by default: the kill switch.
+    # The last allowed user turn is forced to finalize; one more is refused.
+    sessions_enabled: bool = False
+    session_ttl_seconds: int = 1800
+    session_max_turns: int = 4
+    session_max_input_tokens: int = 8000
+    session_max_reply_chars: int = 10000
     github_client_id: str = ""
     github_client_secret: SecretStr | None = None
     google_client_id: str = ""

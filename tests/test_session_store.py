@@ -11,12 +11,7 @@ import json
 import fakeredis
 import pytest
 
-try:
-    from koleslaw_api.services import session_store as ss
-except ImportError:
-    ss = None
-
-pytestmark = pytest.mark.xfail(strict=True, reason="session_store not built yet")
+from koleslaw_api.services import session_store as ss
 
 OWNER = "11111111-1111-1111-1111-111111111111"
 OTHER = "22222222-2222-2222-2222-222222222222"
@@ -101,7 +96,7 @@ async def test_create_sets_the_ttl(store, redis) -> None:
 
 
 async def test_get_unknown_id_is_not_found(store) -> None:
-    with pytest.raises(ss.SessionNotFound):
+    with pytest.raises(ss.SessionNotFoundError):
         await store.get("no-such-session", OWNER)
 
 
@@ -117,9 +112,9 @@ async def test_get_does_not_extend_the_ttl(store, redis) -> None:
 
 async def test_wrong_owner_is_indistinguishable_from_not_found(store) -> None:
     session_id, _ = await store.create(OWNER)
-    with pytest.raises(ss.SessionNotFound) as wrong:
+    with pytest.raises(ss.SessionNotFoundError) as wrong:
         await store.get(session_id, OTHER)
-    with pytest.raises(ss.SessionNotFound) as missing:
+    with pytest.raises(ss.SessionNotFoundError) as missing:
         await store.get("no-such-session", OTHER)
     assert type(wrong.value) is type(missing.value)
     assert str(wrong.value) == str(missing.value)
@@ -128,7 +123,7 @@ async def test_wrong_owner_is_indistinguishable_from_not_found(store) -> None:
 async def test_wrong_owner_cannot_append_and_session_is_unchanged(store, redis) -> None:
     session_id, _ = await store.create(OWNER)
     before = await redis.get(_key(session_id))
-    with pytest.raises(ss.SessionNotFound):
+    with pytest.raises(ss.SessionNotFoundError):
         await store.append(session_id, OTHER, _turns(), input_tokens=12)
     assert await redis.get(_key(session_id)) == before
 
@@ -172,7 +167,7 @@ async def test_append_resets_the_ttl(store, redis) -> None:
 async def test_append_after_delete_does_not_recreate_the_session(store, redis) -> None:
     session_id, _ = await store.create(OWNER)
     await store.delete(session_id, OWNER)
-    with pytest.raises(ss.SessionNotFound):
+    with pytest.raises(ss.SessionNotFoundError):
         await store.append(session_id, OWNER, _turns(), input_tokens=12)
     assert await redis.exists(_key(session_id)) == 0
 
@@ -184,7 +179,7 @@ async def test_delete_destroys_the_session(store, redis) -> None:
     session_id, _ = await store.create(OWNER)
     await store.delete(session_id, OWNER)
     assert await redis.exists(_key(session_id)) == 0
-    with pytest.raises(ss.SessionNotFound):
+    with pytest.raises(ss.SessionNotFoundError):
         await store.get(session_id, OWNER)
 
 
@@ -196,7 +191,7 @@ async def test_expired_session_is_not_found(store, redis) -> None:
     session_id, _ = await store.create(OWNER)
     await redis.pexpire(_key(session_id), 1)
     await asyncio.sleep(0.01)
-    with pytest.raises(ss.SessionNotFound):
+    with pytest.raises(ss.SessionNotFoundError):
         await store.get(session_id, OWNER)
 
 
@@ -219,7 +214,7 @@ async def test_lock_key_is_set_nx_with_a_120s_expiry(store, redis) -> None:
 async def test_second_concurrent_turn_is_busy(store) -> None:
     session_id, _ = await store.create(OWNER)
     async with store.lock(session_id):
-        with pytest.raises(ss.SessionBusy):
+        with pytest.raises(ss.SessionBusyError):
             async with store.lock(session_id):
                 pass
 
@@ -243,14 +238,22 @@ async def test_releasing_an_expired_lock_leaves_a_new_holder_alone(store, redis)
 
 async def test_errors_share_one_base_and_never_carry_the_raw_id(store) -> None:
     session_id, _ = await store.create(OWNER)
-    assert issubclass(ss.SessionNotFound, ss.SessionError)
-    assert issubclass(ss.SessionBusy, ss.SessionError)
-    assert issubclass(ss.SessionFull, ss.SessionError)
+    assert issubclass(ss.SessionNotFoundError, ss.SessionError)
+    assert issubclass(ss.SessionBusyError, ss.SessionError)
+    assert issubclass(ss.SessionFullError, ss.SessionError)
     async with store.lock(session_id):
-        with pytest.raises(ss.SessionBusy) as busy:
+        with pytest.raises(ss.SessionBusyError) as busy:
             async with store.lock(session_id):
                 pass
-    with pytest.raises(ss.SessionNotFound) as missing:
+    with pytest.raises(ss.SessionNotFoundError) as missing:
         await store.get(session_id, OTHER)
     assert session_id not in str(busy.value)
     assert session_id not in str(missing.value)
+
+
+def test_session_settings_defaults(settings) -> None:
+    assert settings.sessions_enabled is False
+    assert settings.session_ttl_seconds == 1800
+    assert settings.session_max_turns == 4
+    assert settings.session_max_input_tokens == 8000
+    assert settings.session_max_reply_chars == 10000
